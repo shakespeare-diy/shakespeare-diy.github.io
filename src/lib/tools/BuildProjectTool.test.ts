@@ -28,7 +28,7 @@ describe('BuildProjectTool', () => {
   });
 
   it('should have correct description', () => {
-    expect(tool.description).toBe('Build the project using esbuild. Creates optimized production files in the dist directory.');
+    expect(tool.description).toContain('Build the project using esbuild-wasm. Creates optimized production files in the dist directory');
   });
 
   it('should fail if package.json does not exist', async () => {

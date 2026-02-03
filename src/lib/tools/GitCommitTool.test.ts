@@ -54,7 +54,7 @@ describe('GitCommitTool', () => {
   });
 
   it('should have correct description and inputSchema', () => {
-    expect(tool.description).toBe('Commit changes to git with a commit message. Automatically adds all unstaged files.');
+    expect(tool.description).toContain('Commit changes to git with a commit message. Automatically adds all unstaged files.');
     expect(tool.inputSchema).toBeDefined();
   });
 

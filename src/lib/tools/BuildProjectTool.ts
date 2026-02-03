@@ -7,7 +7,7 @@ export class BuildProjectTool implements Tool<void> {
   private cwd: string;
   private esmUrl: string;
 
-  readonly description = "Build the project using esbuild. Creates optimized production files in the dist directory.";
+  readonly description = "Build the project using esbuild-wasm. Creates optimized production files in the dist directory, making the site preview visible to the user (or updating the existing preview) and ready for deployment. This tool also helps verify that your changes are correct. ALWAYS call this tool when you have finished making changes.";
 
   constructor(fs: JSRuntimeFS, cwd: string, esmUrl: string) {
     this.fs = fs;

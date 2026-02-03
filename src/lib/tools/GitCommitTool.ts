@@ -14,7 +14,7 @@ export class GitCommitTool implements Tool<GitCommitParams> {
   private cwd: string;
   private onCommit?: () => void;
 
-  readonly description = "Commit changes to git with a commit message. Automatically adds all unstaged files.";
+  readonly description = "Commit changes to git with a commit message. Automatically adds all unstaged files. ALWAYS call this tool after you have finished making changes, and after you have successfully built the project with the `build_project` tool.";
 
   readonly inputSchema = z.object({
     message: z.string().describe('Commit message text'),
