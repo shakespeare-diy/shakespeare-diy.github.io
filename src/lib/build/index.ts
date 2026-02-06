@@ -287,6 +287,18 @@ export async function buildProject(options: BuildProjectOptions): Promise<{
     // Public directory doesn't exist, which is fine
   }
 
+  // Copy NIP.md if it exists in project root
+  try {
+    const nipMdPath = `${projectPath}/NIP.md`;
+    const nipMdStat = await fs.stat(nipMdPath);
+    if (nipMdStat.isFile()) {
+      const nipMdContent = await fs.readFile(nipMdPath);
+      await fs.writeFile(`${outputPath}/NIP.md`, nipMdContent);
+    }
+  } catch {
+    // NIP.md doesn't exist, which is fine
+  }
+
   // Extract project ID from the project path
   // Expected format: /projects/{projectId}
   const projectId = projectPath.split('/').pop();
