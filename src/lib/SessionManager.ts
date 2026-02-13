@@ -319,6 +319,31 @@ export class SessionManager {
           imageModel: settings.imageModel,
         });
 
+        // Strip image_url parts from all user messages except the last one.
+        // The model has already seen and responded to earlier images, so re-sending
+        // them on every turn just burns tokens. The VFS text path (e.g. "Added file: /tmp/…")
+        // is kept, so the model can `read` the file again if it needs to.
+        const evictSeenImages = (msgs: OpenAI.Chat.Completions.ChatCompletionMessageParam[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => {
+          // Find the index of the last user message
+          let lastUserIdx = -1;
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].role === 'user') {
+              lastUserIdx = i;
+              break;
+            }
+          }
+
+          return msgs.map((msg, idx) => {
+            if (idx === lastUserIdx) return msg; // keep the latest user message intact
+            if (msg.role !== 'user' || typeof msg.content === 'string' || !Array.isArray(msg.content)) return msg;
+
+            const filtered = msg.content.filter(part => part.type !== 'image_url');
+            if (filtered.length === msg.content.length) return msg; // no images to strip
+
+            return { ...msg, content: filtered.length > 0 ? filtered : '' };
+          });
+        };
+
         // Helper function to filter out unsupported image formats (keep only JPG/JPEG/PNG)
         const filterSupportedImages = (msgs: OpenAI.Chat.Completions.ChatCompletionMessageParam[]): OpenAI.Chat.Completions.ChatCompletionMessageParam[] => {
           return msgs.map(msg => {
@@ -377,6 +402,10 @@ export class SessionManager {
         let messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = (systemPrompt
           ? [{ role: 'system', content: systemPrompt }, ...session.messages]
           : session.messages) as OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+
+        // Evict images the model has already seen (all except the last user message).
+        // This is a send-time transformation only — session.messages stays intact for the UI.
+        messages = evictSeenImages(messages);
 
         // Filter out unsupported image formats (keep only JPG/JPEG/PNG for API)
         // This ensures the UI shows all image types, but API only receives supported formats
