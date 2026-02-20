@@ -71,11 +71,6 @@ const defaultConfig: AppConfig = {
       description: "Build Nostr clients with React. This is the default template that you should choose in the majority of cases. It ships with complete Nostr integration out of the box, enabling a variety of use-cases from social media to blogging to AI-powered apps. If you're not sure which template to choose, choose this one.",
       url: "https://gitlab.com/soapbox-pub/mkstack.git",
     },
-    {
-      name: "Nutstack",
-      description: "This is a variant of MKStack extended to support Cashu integration. Choose this template only if the user has indicated they require Cashu integration.",
-      url: "https://gitlab.com/lemonknowsall/nutstack.git",
-    },
   ],
   esmUrl: "https://esm.sh",
   corsProxy: "https://proxy.shakespeare.diy/?url={href}",
