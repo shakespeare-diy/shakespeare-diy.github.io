@@ -35,6 +35,8 @@ import { NostrReadProtocolTool } from '@/lib/tools/NostrReadProtocolTool';
 import { NostrReadNipsIndexTool } from '@/lib/tools/NostrReadNipsIndexTool';
 import { NostrGenerateKindTool } from '@/lib/tools/NostrGenerateKindTool';
 import { NostrPublishEventsTool } from '@/lib/tools/NostrPublishEventsTool';
+import { NostrEncodeTool } from '@/lib/tools/NostrEncodeTool';
+import { NostrDecodeTool } from '@/lib/tools/NostrDecodeTool';
 import { ShellTool } from '@/lib/tools/ShellTool';
 import { ReadConsoleMessagesTool } from '@/lib/tools/ReadConsoleMessagesTool';
 import { SkillTool } from '@/lib/tools/SkillTool';
@@ -217,6 +219,8 @@ export const ChatPane = forwardRef<ChatPaneRef, ChatPaneProps>(({
       nostr_read_nips_index: new NostrReadNipsIndexTool(),
       nostr_generate_kind: new NostrGenerateKindTool(),
       nostr_publish_events: new NostrPublishEventsTool(),
+      nostr_encode: new NostrEncodeTool(),
+      nostr_decode: new NostrDecodeTool(),
       shell: new ShellTool(fs, cwd, git, config.corsProxy, user?.signer),
       read_console_messages: new ReadConsoleMessagesTool(),
       skill: new SkillTool(fs, availableSkills),

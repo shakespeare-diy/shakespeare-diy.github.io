@@ -50,6 +50,8 @@ Shakespeare provides AI agents with specialized tools for project development (n
 - **NostrReadNipsIndexTool**: Read the full list of NIPs, kinds, and tags
 - **NostrFetchEventTool**: Fetch Nostr events using NIP-19 identifiers
 - **NostrGenerateKindTool**: Generate unused Nostr event kind numbers
+- **NostrEncodeTool**: Encode hex values into NIP-19 bech32 entities (npub, note, nprofile, nevent, naddr)
+- **NostrDecodeTool**: Decode NIP-19 bech32 entities into hex and structured data
 - **ReadConsoleMessagesTool**: Read console messages from project preview with filtering capabilities
 
 #### Shell Commands
