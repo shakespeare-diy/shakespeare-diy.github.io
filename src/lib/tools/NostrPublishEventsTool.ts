@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { NPool, NRelay1, type NostrEvent } from '@nostrify/nostrify';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, finalizeEvent, nip19 } from 'nostr-tools';
 
 import type { Tool, ToolResult } from "./Tool";
 
@@ -12,10 +12,11 @@ interface NostrPublishEventsParams {
     created_at?: number;
   }>;
   relays?: string[];
+  nsec?: string;
 }
 
 export class NostrPublishEventsTool implements Tool<NostrPublishEventsParams> {
-  readonly description = "Publish Nostr events using an ephemeral keypair. All events in a single call are signed by the same ephemeral pubkey. You should include a kind 0 (profile metadata) event in the events array to give the publisher an identity. If no kind 0 is provided, a generic one will be created automatically as a fallback.";
+  readonly description = "Publish Nostr events using an ephemeral keypair. All events in a single call are signed by the same ephemeral pubkey. You should include a kind 0 (profile metadata) event in the events array to give the publisher an identity. If no kind 0 is provided, a generic one will be created automatically as a fallback. To reuse the same identity across calls, pass the nsec returned from a previous call.";
 
   readonly inputSchema = z.object({
     events: z.array(
@@ -27,10 +28,11 @@ export class NostrPublishEventsTool implements Tool<NostrPublishEventsParams> {
       })
     ).min(1).describe('Array of partial Nostr events to publish. Include a kind 0 event to set profile metadata.'),
     relays: z.array(z.string().url()).optional().describe('Optional array of relay URLs to publish to (default: hardcoded relay list)'),
+    nsec: z.string().startsWith('nsec1').optional().describe('Optional nsec (bech32-encoded secret key) to reuse a keypair from a previous call. If omitted, a new ephemeral keypair is generated.'),
   });
 
   async execute(args: NostrPublishEventsParams): Promise<ToolResult> {
-    const { events: partialEvents, relays } = args;
+    const { events: partialEvents, relays, nsec } = args;
 
     // Default relays if none provided
     const defaultRelays = [
@@ -41,9 +43,19 @@ export class NostrPublishEventsTool implements Tool<NostrPublishEventsParams> {
 
     const targetRelays = relays && relays.length > 0 ? relays : defaultRelays;
 
-    // Generate ephemeral keypair
-    const secretKey = generateSecretKey();
+    // Use provided nsec or generate a new ephemeral keypair
+    let secretKey: Uint8Array;
+    if (nsec) {
+      const decoded = nip19.decode(nsec);
+      if (decoded.type !== 'nsec') {
+        throw new Error('Invalid nsec: expected an nsec1-encoded secret key');
+      }
+      secretKey = decoded.data;
+    } else {
+      secretKey = generateSecretKey();
+    }
     const pubkey = getPublicKey(secretKey);
+    const nsecEncoded = nip19.nsecEncode(secretKey);
 
     // Check if user provided a kind 0 event
     const hasKind0 = partialEvents.some((e) => e.kind === 0);
@@ -105,6 +117,7 @@ export class NostrPublishEventsTool implements Tool<NostrPublishEventsParams> {
       const summary = {
         success: true,
         pubkey,
+        nsec: nsecEncoded,
         events_published: allEvents.length,
         relays: targetRelays,
         events: allEvents.map((e) => ({
