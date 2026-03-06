@@ -144,7 +144,7 @@ export function ProviderConfigDialog({
                 </Label>
                 <Input
                   id="provider-relays"
-                  placeholder="wss://relay.nostr.band, wss://relay.damus.io"
+                  placeholder="wss://relay.ditto.pub, wss://relay.damus.io"
                   value={localProvider.relayUrls?.join(', ') || ''}
                   onChange={(e) => setLocalProvider({
                     ...localProvider,

@@ -35,7 +35,7 @@ export class NostrPublishEventsTool implements Tool<NostrPublishEventsParams> {
     // Default relays if none provided
     const defaultRelays = [
       'wss://relay.ditto.pub',
-      'wss://relay.nostr.band',
+      'wss://relay.damus.io',
       'wss://relay.primal.net',
     ];
 

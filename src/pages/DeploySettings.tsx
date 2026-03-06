@@ -208,9 +208,9 @@ export function DeploySettings() {
         type: 'nsite',
         gateway: 'nosto.re',
         relayUrls: [
+          'wss://relay.ditto.pub',
           'wss://relay.nsite.lol',
           'wss://relay.nosto.re',
-          'wss://relay.nostr.band',
           'wss://relay.primal.net',
           'wss://relay.damus.io',
           'wss://purplerelay.com',

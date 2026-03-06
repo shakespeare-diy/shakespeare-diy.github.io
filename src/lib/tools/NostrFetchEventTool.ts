@@ -59,7 +59,7 @@ export class NostrFetchEventTool implements Tool<NostrFetchEventParams> {
 
     const defaultRelays = [
       'wss://relay.ditto.pub',
-      'wss://relay.nostr.band',
+      'wss://relay.damus.io',
       'wss://relay.primal.net',
     ];
 

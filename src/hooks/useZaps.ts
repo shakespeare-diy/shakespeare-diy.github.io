@@ -200,7 +200,7 @@ export function useZaps(
       const zapRequest = nip57.makeZapRequest({
         event: actualTarget,
         amount: zapAmount,
-        relays: writeRelays.length > 0 ? writeRelays : ['wss://relay.nostr.band'],
+        relays: writeRelays.length > 0 ? writeRelays : ['wss://relay.ditto.pub'],
         comment
       });
 

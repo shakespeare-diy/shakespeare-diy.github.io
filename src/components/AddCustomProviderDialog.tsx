@@ -86,7 +86,7 @@ export function AddCustomProviderDialog({
         gateway: customGateway.trim() || 'nsite.lol',
         relayUrls: customRelayUrls.trim()
           ? customRelayUrls.split(',').map(s => s.trim()).filter(Boolean)
-          : ['wss://relay.nostr.band'],
+          : ['wss://relay.ditto.pub'],
         blossomServers: customBlossomServers.trim()
           ? customBlossomServers.split(',').map(s => s.trim()).filter(Boolean)
           : ['https://blossom.primal.net/'],
@@ -264,7 +264,7 @@ export function AddCustomProviderDialog({
                     <Label htmlFor="custom-relays">Relay URLs (comma-separated)</Label>
                     <Input
                       id="custom-relays"
-                      placeholder="wss://relay.nostr.band, wss://relay.damus.io"
+                      placeholder="wss://relay.ditto.pub, wss://relay.damus.io"
                       value={customRelayUrls}
                       onChange={(e) => setCustomRelayUrls(e.target.value)}
                     />
