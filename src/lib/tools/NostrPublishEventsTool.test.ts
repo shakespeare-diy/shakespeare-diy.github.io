@@ -11,6 +11,15 @@ vi.mock('nostr-tools', () => ({
     id: 'test-event-id-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     sig: 'test-signature-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
   })),
+  nip19: {
+    decode: vi.fn((value: string) => {
+      if (value.startsWith('nsec1')) {
+        return { type: 'nsec', data: new Uint8Array(32).fill(2) };
+      }
+      throw new Error('Invalid nip19 value');
+    }),
+    nsecEncode: vi.fn(() => 'nsec1testkey'),
+  },
 }));
 
 // Mock NPool to avoid actual network calls
