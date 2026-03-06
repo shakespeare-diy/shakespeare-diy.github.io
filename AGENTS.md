@@ -52,6 +52,7 @@ Shakespeare provides AI agents with specialized tools for project development (n
 - **NostrGenerateKindTool**: Generate unused Nostr event kind numbers
 - **NostrEncodeTool**: Encode hex values into NIP-19 bech32 entities (npub, note, nprofile, nevent, naddr)
 - **NostrDecodeTool**: Decode NIP-19 bech32 entities into hex and structured data
+- **BlossomUploadTool**: Upload files from the project to Blossom media hosting, returns a public URL
 - **ReadConsoleMessagesTool**: Read console messages from project preview with filtering capabilities
 
 #### Shell Commands

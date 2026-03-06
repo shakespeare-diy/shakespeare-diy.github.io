@@ -37,6 +37,7 @@ import { NostrGenerateKindTool } from '@/lib/tools/NostrGenerateKindTool';
 import { NostrPublishEventsTool } from '@/lib/tools/NostrPublishEventsTool';
 import { NostrEncodeTool } from '@/lib/tools/NostrEncodeTool';
 import { NostrDecodeTool } from '@/lib/tools/NostrDecodeTool';
+import { BlossomUploadTool } from '@/lib/tools/BlossomUploadTool';
 import { ShellTool } from '@/lib/tools/ShellTool';
 import { ReadConsoleMessagesTool } from '@/lib/tools/ReadConsoleMessagesTool';
 import { SkillTool } from '@/lib/tools/SkillTool';
@@ -221,6 +222,7 @@ export const ChatPane = forwardRef<ChatPaneRef, ChatPaneProps>(({
       nostr_publish_events: new NostrPublishEventsTool(),
       nostr_encode: new NostrEncodeTool(),
       nostr_decode: new NostrDecodeTool(),
+      blossom_upload: new BlossomUploadTool(fs, cwd, user?.signer),
       shell: new ShellTool(fs, cwd, git, config.corsProxy, user?.signer),
       read_console_messages: new ReadConsoleMessagesTool(),
       skill: new SkillTool(fs, availableSkills),
