@@ -1,4 +1,4 @@
-import { Settings, RefreshCw, Trash2, XCircle, Loader2, RotateCcw, Cog, Globe, Image, Code, Monitor, Award, Bug, FolderTree, Terminal as TerminalIcon, GitBranch } from "lucide-react";
+import { Settings, RefreshCw, Trash2, XCircle, Loader2, RotateCcw, Cog, Globe, Image, Code, Monitor, Award, Bug, BarChart3, FolderTree, Terminal as TerminalIcon, GitBranch } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,8 @@ export function SystemSettings() {
   const [fsPathPluginsInput, setFsPathPluginsInput] = useState(config.fsPathPlugins);
   const [fsPathTemplatesInput, setFsPathTemplatesInput] = useState(config.fsPathTemplates);
   const [sentryDsnInput, setSentryDsnInput] = useState(config.sentryDsn);
+  const [plausibleDomainInput, setPlausibleDomainInput] = useState(config.plausibleDomain);
+  const [plausibleEndpointInput, setPlausibleEndpointInput] = useState(config.plausibleEndpoint);
 
   // Check which settings differ from defaults
   const isModified = useMemo(() => ({
@@ -46,6 +48,8 @@ export function SystemSettings() {
     fsPathPlugins: config.fsPathPlugins !== defaultConfig.fsPathPlugins,
     fsPathTemplates: config.fsPathTemplates !== defaultConfig.fsPathTemplates,
     sentryDsn: config.sentryDsn !== defaultConfig.sentryDsn,
+    plausibleDomain: config.plausibleDomain !== defaultConfig.plausibleDomain,
+    plausibleEndpoint: config.plausibleEndpoint !== defaultConfig.plausibleEndpoint,
   }), [config, defaultConfig]);
 
   // Restore functions - clear the value from config to use the default
@@ -160,6 +164,24 @@ export function SystemSettings() {
     setSentryDsnInput(defaultValue);
     updateConfig((current) => {
       const { sentryDsn, ...rest } = current;
+      return rest;
+    });
+  };
+
+  const restorePlausibleDomain = () => {
+    const defaultValue = defaultConfig.plausibleDomain;
+    setPlausibleDomainInput(defaultValue);
+    updateConfig((current) => {
+      const { plausibleDomain, ...rest } = current;
+      return rest;
+    });
+  };
+
+  const restorePlausibleEndpoint = () => {
+    const defaultValue = defaultConfig.plausibleEndpoint;
+    setPlausibleEndpointInput(defaultValue);
+    updateConfig((current) => {
+      const { plausibleEndpoint, ...rest } = current;
       return rest;
     });
   };
@@ -750,6 +772,106 @@ export function SystemSettings() {
               <p className="text-xs text-muted-foreground">
                 {t('sentryDsnDescription')}
               </p>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* Plausible Analytics Configuration */}
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="plausible-analytics">
+          <AccordionTrigger className="px-4 py-3 hover:no-underline">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <h4 className="text-sm font-medium">{t('plausibleAnalytics')}</h4>
+              {(isModified.plausibleDomain || isModified.plausibleEndpoint) && (
+                <div className="h-2 w-2 rounded-full bg-yellow-500" title={t('modified')} />
+              )}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <div className="py-1 space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="plausible-domain" className="text-sm font-medium">
+                    {t('plausibleDomain')}
+                  </Label>
+                  {isModified.plausibleDomain && (
+                    <div className="h-2 w-2 rounded-full bg-yellow-500" title={t('modified')} />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    id="plausible-domain"
+                    type="text"
+                    placeholder="example.com"
+                    value={plausibleDomainInput}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setPlausibleDomainInput(value);
+                      updateConfig((current) => ({
+                        ...current,
+                        plausibleDomain: value,
+                      }));
+                    }}
+                    className="flex-1"
+                  />
+                  {isModified.plausibleDomain && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={restorePlausibleDomain}
+                      title={t('restoreToDefault')}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('plausibleDomainDescription')}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="plausible-endpoint" className="text-sm font-medium">
+                    {t('plausibleEndpoint')}
+                  </Label>
+                  {isModified.plausibleEndpoint && (
+                    <div className="h-2 w-2 rounded-full bg-yellow-500" title={t('modified')} />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    id="plausible-endpoint"
+                    type="text"
+                    placeholder="https://plausible.example.com/api/event"
+                    value={plausibleEndpointInput}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setPlausibleEndpointInput(value);
+                      updateConfig((current) => ({
+                        ...current,
+                        plausibleEndpoint: value,
+                      }));
+                    }}
+                    className="flex-1"
+                  />
+                  {isModified.plausibleEndpoint && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={restorePlausibleEndpoint}
+                      title={t('restoreToDefault')}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('plausibleEndpointDescription')}
+                </p>
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>
