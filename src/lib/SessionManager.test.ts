@@ -58,6 +58,8 @@ const testConfig: AppConfig = {
   fsPathTemplates: '/templates',
   sentryDsn: '',
   sentryEnabled: false,
+  plausibleDomain: '',
+  plausibleEndpoint: '',
 };
 
 describe('SessionManager', () => {

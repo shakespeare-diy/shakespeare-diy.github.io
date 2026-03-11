@@ -68,6 +68,10 @@ export interface AppConfig {
   sentryEnabled: boolean;
   /** System prompt EJS template */
   systemPrompt?: string;
+  /** Plausible Analytics domain (empty string = disabled). */
+  plausibleDomain: string;
+  /** Plausible Analytics API endpoint (empty string = use default). */
+  plausibleEndpoint: string;
 }
 
 export interface AppContextType {

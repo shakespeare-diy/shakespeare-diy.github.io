@@ -65,6 +65,8 @@ export function TestApp({ children }: TestAppProps) {
     fsPathTemplates: '/templates',
     sentryDsn: '',
     sentryEnabled: false,
+    plausibleDomain: '',
+    plausibleEndpoint: '',
   };
 
   // Initialize LightningFS for testing

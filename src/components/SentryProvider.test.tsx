@@ -45,6 +45,8 @@ describe('SentryProvider', () => {
       fsPathTmp: '/tmp',
       fsPathPlugins: '/plugins',
       fsPathTemplates: '/templates',
+      plausibleDomain: '',
+      plausibleEndpoint: '',
     };
 
     render(
@@ -87,6 +89,8 @@ describe('SentryProvider', () => {
       fsPathTmp: '/tmp',
       fsPathPlugins: '/plugins',
       fsPathTemplates: '/templates',
+      plausibleDomain: '',
+      plausibleEndpoint: '',
     };
 
     render(
@@ -130,6 +134,8 @@ describe('SentryProvider', () => {
       fsPathTmp: '/tmp',
       fsPathPlugins: '/plugins',
       fsPathTemplates: '/templates',
+      plausibleDomain: '',
+      plausibleEndpoint: '',
     };
 
     render(
@@ -176,6 +182,8 @@ describe('SentryProvider', () => {
       fsPathTmp: '/tmp',
       fsPathPlugins: '/plugins',
       fsPathTemplates: '/templates',
+      plausibleDomain: '',
+      plausibleEndpoint: '',
     };
 
     render(

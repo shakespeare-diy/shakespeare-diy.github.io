@@ -60,6 +60,8 @@ const AppConfigSchema = z.object({
   sentryDsn: z.string(),
   sentryEnabled: z.boolean(),
   systemPrompt: z.string(),
+  plausibleDomain: z.string(),
+  plausibleEndpoint: z.string(),
 }) satisfies z.ZodType<AppConfig>;
 
 export function AppProvider(props: AppProviderProps) {

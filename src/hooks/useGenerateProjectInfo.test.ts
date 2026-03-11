@@ -80,6 +80,8 @@ describe('useGenerateProjectInfo', () => {
       fsPathTemplates: '/templates',
       sentryDsn: '',
       sentryEnabled: false,
+      plausibleDomain: '',
+      plausibleEndpoint: '',
     };
     mockUseAppContext.mockReturnValue({
       config,
@@ -242,6 +244,8 @@ describe('useGenerateProjectInfo', () => {
       fsPathTemplates: '/templates',
       sentryDsn: '',
       sentryEnabled: false,
+      plausibleDomain: '',
+      plausibleEndpoint: '',
     };
     mockUseAppContext.mockReturnValue({
       config,

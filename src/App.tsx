@@ -15,6 +15,7 @@ import { AppProvider } from '@/components/AppProvider';
 import { AppConfig } from '@/contexts/AppContext';
 import { useAppContext } from '@/hooks/useAppContext';
 import { SentryProvider } from '@/components/SentryProvider';
+import { PlausibleProvider } from '@/components/PlausibleProvider';
 import { AISettingsProvider } from '@/components/AISettingsProvider';
 import { GitSettingsProvider } from '@/components/GitSettingsProvider';
 import { DeploySettingsProvider } from '@/components/DeploySettingsProvider';
@@ -87,6 +88,8 @@ const defaultConfig: AppConfig = {
   fsPathTemplates: "/templates",
   sentryDsn: import.meta.env.VITE_SENTRY_DSN || "",
   sentryEnabled: true,
+  plausibleDomain: import.meta.env.VITE_PLAUSIBLE_DOMAIN || "",
+  plausibleEndpoint: import.meta.env.VITE_PLAUSIBLE_ENDPOINT || "",
 };
 
 // Initialize filesystem adapter
@@ -131,7 +134,8 @@ export function App() {
       <UnheadProvider head={head}>
         <QueryClientProvider client={queryClient}>
           <AppProvider storageKey="nostr:app-config" defaultConfig={defaultConfig}>
-            <SentryProvider>
+            <PlausibleProvider>
+              <SentryProvider>
               <FSProvider fs={fs}>
                 <ConsoleErrorProvider>
                   <FSCleanupHandler />
@@ -162,7 +166,8 @@ export function App() {
                   </NostrLoginProvider>
                 </ConsoleErrorProvider>
               </FSProvider>
-            </SentryProvider>
+              </SentryProvider>
+            </PlausibleProvider>
           </AppProvider>
         </QueryClientProvider>
       </UnheadProvider>
