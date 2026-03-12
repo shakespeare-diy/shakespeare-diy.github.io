@@ -234,14 +234,6 @@ export default function Index() {
         prompt.trim(),
         template.url,
         projectId,
-        () => {
-          // Show a toast if template update fails (non-critical)
-          toast({
-            title: t('templateUpdateFailed'),
-            description: t('templateUpdateFailedDescription'),
-            variant: 'default',
-          });
-        },
         { name: template.name, description: template.description }
       );
 

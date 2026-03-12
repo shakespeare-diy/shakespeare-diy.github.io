@@ -537,8 +537,6 @@
   "deleting": "Deleting...",
   "restoreToDefault": "Restore to default",
   "restoredToDefault": "Restored to Default",
-  "templateUpdateFailed": "Template Update Failed",
-  "templateUpdateFailedDescription": "Failed to update the project template from the remote repository. Using the cached version instead.",
   "templatesDirectory": "Templates",
   "terminal": "Terminal",
   "templateName": "Template Name",

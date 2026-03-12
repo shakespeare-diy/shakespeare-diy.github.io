@@ -57,48 +57,50 @@ export class ProjectsManager {
    * Returns the path to the cached template.
    *
    * @param templateUrl - Git repository URL of the template
-   * @param onUpdateError - Optional callback when template update fails (non-critical)
    * @returns Path to the cached template directory
    */
-  async updateTemplate(templateUrl: string, onUpdateError?: (error: Error) => void): Promise<string> {
+  async updateTemplate(templateUrl: string): Promise<string> {
     // Generate a safe directory name from the template URL
     const templateName = this.getTemplateNameFromUrl(templateUrl);
     const templatePath = `${this.templatesDir}/${templateName}`;
 
-    try {
-      // Check if template already exists
-      await this.fs.stat(templatePath);
+    const templateExists = await this.fs.stat(templatePath).then(() => true, () => false);
 
+    if (templateExists) {
       // Template exists, try to update it with force pull
       try {
         await this.forcePullTemplate(templatePath);
+        return templatePath;
       } catch (updateError) {
-        // Update failed, but we can continue with the existing template
-        console.warn(`Failed to update template at ${templatePath}:`, updateError);
-        if (onUpdateError) {
-          onUpdateError(updateError instanceof Error ? updateError : new Error(String(updateError)));
-        }
-      }
-    } catch {
-      // Template doesn't exist, clone it shallowly
-      await this.fs.mkdir(templatePath, { recursive: true });
-
-      try {
-        await this.git.clone({
-          dir: templatePath,
-          url: templateUrl,
-          singleBranch: true,
-          depth: 1,
-        });
-      } catch (cloneError) {
-        // Clean up on clone failure
+        // Force pull failed (common with shallow clones when remote has new commits).
+        // Delete the stale cache and re-clone fresh below.
+        console.warn(`Force pull failed for template at ${templatePath}, re-cloning fresh:`, updateError);
         try {
           await this.deleteDirectory(templatePath);
         } catch {
           // Ignore cleanup errors
         }
-        throw cloneError;
       }
+    }
+
+    // Template doesn't exist (or was deleted after failed update), clone it fresh
+    await this.fs.mkdir(templatePath, { recursive: true });
+
+    try {
+      await this.git.clone({
+        dir: templatePath,
+        url: templateUrl,
+        singleBranch: true,
+        depth: 1,
+      });
+    } catch (cloneError) {
+      // Clean up on clone failure
+      try {
+        await this.deleteDirectory(templatePath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw cloneError;
     }
 
     return templatePath;
@@ -224,7 +226,7 @@ export class ProjectsManager {
     }
   }
 
-  async createProject(name: string, templateUrl: string, customId?: string, onTemplateUpdateError?: (error: Error) => void, templateMetadata?: { name: string; description: string }): Promise<Project> {
+  async createProject(name: string, templateUrl: string, customId?: string, templateMetadata?: { name: string; description: string }): Promise<Project> {
     const id = customId || await this.generateUniqueProjectId(name);
 
     // Check if project with this ID already exists when using custom ID
@@ -235,7 +237,7 @@ export class ProjectsManager {
     const projectPath = `${this.dir}/${id}`;
 
     // Ensure template is cached and up-to-date
-    const templatePath = await this.updateTemplate(templateUrl, onTemplateUpdateError);
+    const templatePath = await this.updateTemplate(templateUrl);
 
     // Create project directory
     await this.fs.mkdir(projectPath, { recursive: true });
