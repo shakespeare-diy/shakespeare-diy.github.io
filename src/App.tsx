@@ -136,36 +136,36 @@ export function App() {
           <AppProvider storageKey="nostr:app-config" defaultConfig={defaultConfig}>
             <PlausibleProvider>
               <SentryProvider>
-              <FSProvider fs={fs}>
-                <ConsoleErrorProvider>
-                  <FSCleanupHandler />
-                  <NostrLoginProvider storageKey='nostr:login'>
-                    <NostrProvider>
-                      <NostrSync />
-                      <AISettingsProvider>
-                        <GitSettingsProvider>
-                          <DeploySettingsProvider>
-                            <GitSyncProvider>
-                              <SessionManagerProvider>
-                                <TooltipProvider>
-                                  <Toaster />
-                                  <DynamicFavicon />
-                                  <OfflineIndicator />
-                                  <PWAUpdatePrompt />
-                                  <LockdownModeDetector />
-                                  <Suspense>
-                                    <AppRouter />
-                                  </Suspense>
-                                </TooltipProvider>
-                              </SessionManagerProvider>
-                            </GitSyncProvider>
-                          </DeploySettingsProvider>
-                        </GitSettingsProvider>
-                      </AISettingsProvider>
-                    </NostrProvider>
-                  </NostrLoginProvider>
-                </ConsoleErrorProvider>
-              </FSProvider>
+                <FSProvider fs={fs}>
+                  <ConsoleErrorProvider>
+                    <FSCleanupHandler />
+                    <NostrLoginProvider storageKey='nostr:login'>
+                      <NostrProvider>
+                        <NostrSync />
+                        <AISettingsProvider>
+                          <GitSettingsProvider>
+                            <DeploySettingsProvider>
+                              <GitSyncProvider>
+                                <SessionManagerProvider>
+                                  <TooltipProvider>
+                                    <Toaster />
+                                    <DynamicFavicon />
+                                    <OfflineIndicator />
+                                    <PWAUpdatePrompt />
+                                    <LockdownModeDetector />
+                                    <Suspense>
+                                      <AppRouter />
+                                    </Suspense>
+                                  </TooltipProvider>
+                                </SessionManagerProvider>
+                              </GitSyncProvider>
+                            </DeploySettingsProvider>
+                          </GitSettingsProvider>
+                        </AISettingsProvider>
+                      </NostrProvider>
+                    </NostrLoginProvider>
+                  </ConsoleErrorProvider>
+                </FSProvider>
               </SentryProvider>
             </PlausibleProvider>
           </AppProvider>

@@ -24,11 +24,8 @@ import { ArrowUp } from 'lucide-react';
 import { useSeoMeta } from '@unhead/react';
 import { ShakespeareLogo } from '@/components/ShakespeareLogo';
 import { AppShowcase } from '@/components/AppShowcase';
-import { useToast } from '@/hooks/useToast';
-
 export default function Index() {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const [prompt, setPrompt] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [storedPrompt, setStoredPrompt] = useLocalStorage('shakespeare-draft-prompt', '');
