@@ -11,6 +11,7 @@ interface GenerateImageParams {
   output_format?: "png" | "jpeg" | "webp";
   output_compression?: number;
   size?: "auto" | "1024x1024" | "1536x1024" | "1024x1536" | "256x256" | "512x512" | "1792x1024" | "1024x1792";
+  background?: "transparent" | "opaque" | "auto";
 }
 
 export type ImageGenerationMode = 'chat' | 'image';
@@ -23,6 +24,7 @@ export class GenerateImageTool implements Tool<GenerateImageParams> {
     output_format: z.enum(["png", "jpeg", "webp"]).optional().describe('Output format for the image (e.g., "png", "jpeg", "webp"). Support varies by model - leave blank if unsure'),
     output_compression: z.number().min(1).max(100).optional().describe('Compression quality for the image (0 to 100). Only applicable for "jpeg" and "webp" formats'),
     size: z.enum(["auto", "1024x1024", "1536x1024", "1024x1536", "256x256", "512x512", "1792x1024", "1024x1792"]).optional().describe('Size of the generated image (e.g., "1024x1024", "1536x1024"). Support varies by model - leave blank if unsure'),
+    background: z.enum(["transparent", "opaque", "auto"]).optional().describe('Background setting for the generated image. Use "transparent" for images that need transparency (e.g., logos, icons, overlays). Only supported with "png" or "webp" output formats'),
   });
 
   constructor(
@@ -36,7 +38,7 @@ export class GenerateImageTool implements Tool<GenerateImageParams> {
   ) {}
 
   async execute(args: GenerateImageParams): Promise<ToolResult> {
-    const { prompt, output_format, output_compression, size } = args;
+    const { prompt, output_format, output_compression, size, background } = args;
 
     try {
       const client = createAIClient(this.provider, this.user, this.corsProxy);
@@ -114,6 +116,7 @@ export class GenerateImageTool implements Tool<GenerateImageParams> {
           output_format,
           output_compression,
           size,
+          background,
         });
 
         // Extract cost from response

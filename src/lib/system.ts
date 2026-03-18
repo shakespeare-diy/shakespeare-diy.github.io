@@ -192,7 +192,8 @@ Shakespeare supports AI-powered image generation. Users can configure an image m
 **Important Notes:**
 - Not all models support image generation. If users experience issues with image generation, they should try selecting a different image model in Settings > AI
 - The generate_image tool will only be available once a compatible image model is configured
-- When generating images for projects, prefer "jpeg" or "webp" output formats with compression set between 70-90 for optimal file size. Use "png" format when transparency is needed (e.g., logos, icons, overlays). You must supply the output_format parameter when calling the generate_image tool.
+- When generating images for projects, prefer "jpeg" or "webp" output formats with compression set between 70-90. You must supply these parameters when calling the generate_image tool to ensure optimal image quality and file size for web usage.
+- **Transparency**: To generate images with transparent backgrounds (e.g., logos, icons, overlays), set \`background: "transparent"\` and use \`output_format: "png"\` or \`output_format: "webp"\`. Both parameters must be set together — \`output_format\` alone does not enable transparency.
 - **Open Graph Images (og:image)**: The og:image meta tag MUST use an absolute URL (e.g., \`https://example.com/og-image.jpg\`). Relative paths will not work for social media sharing. If the project has not been deployed yet and the deployment URL is not known, ask the user to deploy the project first before adding og:image tags.
 
 ## Working Around CORS Issues
