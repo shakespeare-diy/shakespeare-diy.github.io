@@ -39,6 +39,7 @@ interface GitStatus {
   ahead: number;
   behind: number;
   remoteBranchExists: boolean;
+  clonedAtOid: string | null;
 }
 
 export function useGitStatus(projectId: string | null) {
@@ -61,6 +62,7 @@ export function useGitStatus(projectId: string | null) {
           ahead: 0,
           behind: 0,
           remoteBranchExists: false,
+          clonedAtOid: null,
         };
       }
 
@@ -83,6 +85,7 @@ export function useGitStatus(projectId: string | null) {
             ahead: 0,
             behind: 0,
             remoteBranchExists: false,
+            clonedAtOid: null,
           };
         }
 
@@ -166,6 +169,17 @@ export function useGitStatus(projectId: string | null) {
           }
         } catch (error) {
           console.warn('Could not get remotes:', error);
+        }
+
+        // Get clonedAt OID (set when project was cloned from an external repo)
+        let clonedAtOid: string | null = null;
+        try {
+          const value = await git.getConfig({ dir: cwd, path: 'shakespeare.clonedAt' });
+          if (typeof value === 'string' && value.length > 0) {
+            clonedAtOid = value;
+          }
+        } catch {
+          // Config key doesn't exist, that's fine
         }
 
         // Get git status to see what files have changed
@@ -274,6 +288,7 @@ export function useGitStatus(projectId: string | null) {
           ahead,
           behind,
           remoteBranchExists,
+          clonedAtOid,
         };
       } catch (error) {
         console.error('Error checking git status:', error);
@@ -289,6 +304,7 @@ export function useGitStatus(projectId: string | null) {
           ahead: 0,
           behind: 0,
           remoteBranchExists: false,
+          clonedAtOid: null,
         };
       }
     },

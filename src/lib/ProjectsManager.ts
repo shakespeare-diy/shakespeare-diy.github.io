@@ -524,6 +524,18 @@ export class ProjectsManager {
         remote: fork ? 'upstream' : undefined, // Use 'upstream' for forks, otherwise defaults to 'origin'
       });
 
+      // Store the HEAD commit OID at clone time so we can detect user modifications later
+      try {
+        const headOid = await this.git.resolveRef({ dir: projectPath, ref: 'HEAD' });
+        await this.git.setConfig({
+          dir: projectPath,
+          path: 'shakespeare.clonedAt',
+          value: headOid,
+        });
+      } catch (error) {
+        console.warn('Failed to store clonedAt commit OID:', error);
+      }
+
       if (!fork) {
         // Set up 'shakespeare.autosync' config for non-forked repositories
         await this.git.setConfig({

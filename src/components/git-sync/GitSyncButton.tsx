@@ -54,19 +54,28 @@ export function GitSyncButton({ projectId, className }: GitSyncButtonProps) {
     prevIsGitActionOccurring.current = isGitActionOccurring;
   }, [isGitActionOccurring, hasError]);
 
+  // Determine if the user has altered the project (made commits beyond the initial state).
+  // - Template projects (no clonedAtOid): altered when totalCommits > 1 (beyond the initial template commit)
+  // - Cloned projects (has clonedAtOid): altered when the latest commit differs from the clone point
+  const isProjectAltered = !isGitStatusLoading && gitStatus && (() => {
+    if (gitStatus.clonedAtOid) {
+      return gitStatus.latestCommit !== null && gitStatus.latestCommit.oid !== gitStatus.clonedAtOid;
+    }
+    return gitStatus.totalCommits > 1;
+  })();
+
   // Check if we need to show the warning popover
-  const needsRemote = !isGitStatusLoading && gitStatus &&
-    !gitStatus.remotes.find(r => r.name === 'origin') &&
-    gitStatus.totalCommits > 1;
+  const needsRemote = isProjectAltered &&
+    !gitStatus?.remotes.find(r => r.name === 'origin');
 
   // Show warning popover when purple indicator is visible (only if not dismissed)
   useEffect(() => {
-    if (needsRemote && !warningDismissed.current && gitStatus.totalCommits > 1) {
+    if (needsRemote && !warningDismissed.current) {
       setShowWarningPopover(true);
     } else {
       setShowWarningPopover(false);
     }
-  }, [gitStatus?.totalCommits, needsRemote]);
+  }, [needsRemote]);
 
   // Handle button click - dismiss warning popover permanently
   const handleButtonClick = () => {
@@ -96,19 +105,18 @@ export function GitSyncButton({ projectId, className }: GitSyncButtonProps) {
 
     if (isGitStatusLoading || !gitStatus) return null;
 
-    const originRemote = gitStatus.remotes.find(r => r.name === 'origin');
-    const hasRemote = !!originRemote;
+    const hasOrigin = !!gitStatus.remotes.find(r => r.name === 'origin');
 
-    const { remoteBranchExists, ahead, behind, totalCommits } = gitStatus;
+    const { remoteBranchExists, ahead, behind } = gitStatus;
 
     // Yellow indicator: unsynced changes (ahead or behind remote) - third priority
-    const hasUnsyncedChanges = hasRemote && remoteBranchExists && (ahead > 0 || behind > 0);
+    const hasUnsyncedChanges = hasOrigin && remoteBranchExists && (ahead > 0 || behind > 0);
     if (hasUnsyncedChanges) {
       return <IndicatorDot color="yellow" />;
     }
 
-    // Purple indicator: no remote configured, but has commits - lowest priority
-    const needsRemote = !hasRemote && totalCommits > 1;
+    // Purple indicator: project altered but no origin remote configured - lowest priority
+    const needsRemote = isProjectAltered && !hasOrigin;
     if (needsRemote) {
       return <IndicatorDot color="primary" />;
     }
