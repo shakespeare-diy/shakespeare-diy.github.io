@@ -36,6 +36,9 @@ import { VercelAdapter } from '@/lib/deploy/VercelAdapter';
 import { CloudflareAdapter } from '@/lib/deploy/CloudflareAdapter';
 import { DenoDeployAdapter } from '@/lib/deploy/DenoDeployAdapter';
 import { RailwayAdapter } from '@/lib/deploy/RailwayAdapter';
+import { readNsiteVfsConfig, writeNsiteVfsConfig } from '@/lib/nsiteConfig';
+import type { NsiteVfsConfig } from '@/lib/nsiteConfig';
+import { projectNameToDTag } from '@/lib/utils/nsite';
 
 /**
  * Normalize a URL string to ensure it has a protocol
@@ -85,7 +88,10 @@ interface ShakespeareFormData {
 }
 
 interface NsiteFormData {
-  nsec: string;
+  siteTitle: string;
+  siteDescription: string;
+  dTag: string;
+  siteType: 'named' | 'root';
 }
 
 interface NetlifyFormData {
@@ -132,12 +138,49 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
   const [error, setError] = useState<string | null>(null);
   const [isShakespeareFormValid, setIsShakespeareFormValid] = useState(true);
 
+  // .nsite/config.json state — loaded once on mount, used to skip config form on re-deploy
+  const [nsiteVfsConfig, setNsiteVfsConfig] = useState<NsiteVfsConfig | null>(null);
+  const [nsiteVfsConfigLoading, setNsiteVfsConfigLoading] = useState(true);
+  // When a .nsite/config.json already exists, hide the full form and show a summary instead.
+  // The user can click "Edit" to expand it.
+  const [nsiteShowFullForm, setNsiteShowFullForm] = useState(false);
+
+  useEffect(() => {
+    if (!projectId) {
+      setNsiteVfsConfigLoading(false);
+      return;
+    }
+    const projectPath = `${projectsPath}/${projectId}`;
+    readNsiteVfsConfig(fs, projectPath)
+      .then((cfg) => {
+        setNsiteVfsConfig(cfg);
+        // If a config already exists, seed the form from it and stay in summary mode.
+        // If not, show the full form so the user can configure for the first time.
+        if (cfg) {
+          const derivedSiteType = cfg.id === null ? 'root' : 'named';
+          setNsiteForm({
+            siteTitle: cfg.title ?? '',
+            siteDescription: cfg.description ?? '',
+            dTag: (cfg.id != null && cfg.id !== '') ? cfg.id : '',
+            siteType: derivedSiteType,
+          });
+          setNsiteShowFullForm(false);
+        } else {
+          setNsiteShowFullForm(true);
+        }
+      })
+      .finally(() => setNsiteVfsConfigLoading(false));
+  }, [fs, projectsPath, projectId]);
+
   // Provider-specific form data
   const [shakespeareForm, setShakespeareForm] = useState<ShakespeareFormData>({
     subdomain: projectId,
   });
   const [nsiteForm, setNsiteForm] = useState<NsiteFormData>({
-    nsec: '',
+    siteTitle: '',
+    siteDescription: '',
+    dTag: '',
+    siteType: 'named',
   });
   const [netlifyForm, setNetlifyForm] = useState<NetlifyFormData>({
     siteId: '',
@@ -205,17 +248,22 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
       } else if (selectedProvider.type === 'nsite') {
         const nsiteProvider = selectedProvider;
 
-        if (!nsiteForm.nsec) {
-          throw new Error('Site private key (nsec) is required');
+        if (!user) {
+          throw new Error('You must be logged in to deploy to nsite.');
         }
 
         adapter = new NsiteAdapter({
           fs,
           nostr,
-          nsec: nsiteForm.nsec,
+          signer: user.signer,
           gateway: nsiteProvider.gateway,
           relayUrls: nsiteProvider.relayUrls,
           blossomServers: nsiteProvider.blossomServers,
+          siteTitle: nsiteForm.siteTitle || undefined,
+          siteDescription: nsiteForm.siteDescription || undefined,
+          siteIdentifier: nsiteForm.siteType === 'named' && nsiteForm.dTag
+            ? nsiteForm.dTag
+            : undefined,
         });
       } else if (selectedProvider.type === 'netlify') {
         const netlifyProvider = selectedProvider;
@@ -324,9 +372,29 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
           type: 'nsite',
           url: result.url,
           data: {
-            nsec: nsiteForm.nsec,
+            siteTitle: nsiteForm.siteTitle || undefined,
+            siteDescription: nsiteForm.siteDescription || undefined,
+            dTag: nsiteForm.dTag || undefined,
+            siteType: nsiteForm.siteType,
           },
         });
+
+        // Write .nsite/config.json for nsyte CLI interoperability.
+        // This file is safe to commit — it never contains the nsec.
+        const nsiteProvider = selectedProvider;
+        const newNsiteVfsConfig: NsiteVfsConfig = {
+          relays: nsiteProvider.relayUrls,
+          servers: nsiteProvider.blossomServers,
+          id: nsiteForm.siteType === 'root' ? null : (nsiteForm.dTag || undefined),
+          title: nsiteForm.siteTitle || undefined,
+          description: nsiteForm.siteDescription || undefined,
+          fallback: '/index.html',
+          gatewayHostnames: [nsiteProvider.gateway],
+        };
+        await writeNsiteVfsConfig(fs, projectPath, newNsiteVfsConfig);
+        // Update in-memory state so summary view reflects new values immediately
+        setNsiteVfsConfig(newNsiteVfsConfig);
+        setNsiteShowFullForm(false);
       } else if (selectedProvider.type === 'netlify') {
         await updateProjectSettings(selectedProviderId, {
           type: 'netlify',
@@ -434,12 +502,14 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
     setError(null);
     // Reset forms
     setShakespeareForm({ subdomain: projectId });
-    setNsiteForm({ nsec: '' });
+    setNsiteForm({ siteTitle: '', siteDescription: '', dTag: '', siteType: 'named' });
     setNetlifyForm({ siteId: '', siteName: '' });
     setVercelForm({ projectName: projectName || projectId, teamId: '' });
     setCloudflareForm({ projectName: projectName || projectId });
     setDenoDeployForm({ projectName: projectName || projectId });
     setRailwayForm({ workspaceId: '', projectId: '', environmentId: '', serviceId: '', projectName: projectName || projectId });
+    // Return to summary mode so next open shows the compact view (if config exists)
+    setNsiteShowFullForm(false);
     onClose();
   };
 
@@ -451,8 +521,21 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
     setIsShakespeareFormValid(isValid);
   }, []);
 
-  const handleNsiteNsecChange = useCallback((nsec: string) => {
-    setNsiteForm({ nsec });
+  const handleNsiteSiteTitleChange = useCallback((siteTitle: string) => {
+    setNsiteForm(prev => ({ ...prev, siteTitle }));
+    // Derive the dTag from the title so the user never has to think about it.
+    // Falls back to projectName when the title is blank.
+    projectNameToDTag(siteTitle || projectName).then(dTag => {
+      setNsiteForm(prev => ({ ...prev, dTag }));
+    });
+  }, [projectName]);
+
+  const handleNsiteSiteDescriptionChange = useCallback((siteDescription: string) => {
+    setNsiteForm(prev => ({ ...prev, siteDescription }));
+  }, []);
+
+  const handleNsiteSiteTypeChange = useCallback((siteType: 'named' | 'root') => {
+    setNsiteForm(prev => ({ ...prev, siteType }));
   }, []);
 
   const handleNetlifySiteChange = useCallback((siteId: string, siteName: string) => {
@@ -501,15 +584,87 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
     }
 
     if (selectedProvider.type === 'nsite') {
+      // While the .nsite/config.json load is still in flight, render nothing to avoid flicker
+      if (nsiteVfsConfigLoading) return null;
+
+      // Summary view: shown when .nsite/config.json already exists and user hasn't clicked Edit
+      if (nsiteVfsConfig && !nsiteShowFullForm) {
+        const isRoot = nsiteVfsConfig.id === null;
+        const siteLabel = isRoot
+          ? 'Root site'
+          : nsiteVfsConfig.id
+          ? `Named site: ${nsiteVfsConfig.id}`
+          : 'Named site';
+        const relayCount = nsiteVfsConfig.relays?.length ?? 0;
+        const serverCount = nsiteVfsConfig.servers?.length ?? 0;
+
+        return (
+          <div className="space-y-3">
+            <div className="rounded-md border bg-muted/30 p-3 space-y-2 text-sm">
+              {nsiteVfsConfig.title && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Title</span>
+                  <span className="font-medium">{nsiteVfsConfig.title}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Type</span>
+                <span className="font-medium">{siteLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Relays</span>
+                <span className="font-medium">{relayCount} configured</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Blossom servers</span>
+                <span className="font-medium">{serverCount} configured</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+              onClick={() => setNsiteShowFullForm(true)}
+            >
+              Edit site settings
+            </button>
+          </div>
+        );
+      }
+
+      // Full config form: shown on first deploy or when user clicks "Edit site settings"
       const savedConfig = projectSettings.providers[selectedProviderId];
-      const savedNsec = savedConfig?.type === 'nsite' ? savedConfig.data.nsec : undefined;
+      const legacy = savedConfig?.type === 'nsite' ? savedConfig.data : undefined;
+
+      // .nsite/config.json wins; .git/shakespeare/deploy.json is the legacy fallback
+      const savedSiteTitle       = nsiteVfsConfig?.title       ?? legacy?.siteTitle;
+      const savedSiteDescription = nsiteVfsConfig?.description ?? legacy?.siteDescription;
+      const savedSiteType = nsiteVfsConfig
+        ? (nsiteVfsConfig.id === null ? 'root' : 'named')
+        : legacy?.siteType;
 
       return (
-        <NsiteDeployForm
-          gateway={selectedProvider.gateway}
-          savedNsec={savedNsec}
-          onNsecChange={handleNsiteNsecChange}
-        />
+        <div className="space-y-3">
+          <NsiteDeployForm
+            key={selectedProviderId}
+            projectName={projectName || projectId}
+            savedNsec={legacy?.nsec}
+            savedSiteTitle={savedSiteTitle}
+            savedSiteDescription={savedSiteDescription}
+            savedSiteType={savedSiteType}
+            onSiteTitleChange={handleNsiteSiteTitleChange}
+            onSiteDescriptionChange={handleNsiteSiteDescriptionChange}
+            onSiteTypeChange={handleNsiteSiteTypeChange}
+          />
+          {nsiteVfsConfig && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+              onClick={() => setNsiteShowFullForm(false)}
+            >
+              Back to summary
+            </button>
+          )}
+        </div>
       );
     }
 
@@ -769,6 +924,22 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
                 </Alert>
               )}
 
+              {selectedProvider?.type === 'nsite' && !user && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    You must be logged in with Nostr to deploy to nsite.{' '}
+                    <Link
+                      to="/settings/nostr"
+                      className="underline hover:no-underline"
+                      onClick={handleClose}
+                    >
+                      Go to Nostr Settings
+                    </Link>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -783,7 +954,8 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
                     isDeploying ||
                     (selectedProvider.type === 'shakespeare' && !user) ||
                     (selectedProvider.type === 'shakespeare' && !isShakespeareFormValid) ||
-                    (selectedProvider.type === 'nsite' && !nsiteForm.nsec) ||
+                    (selectedProvider.type === 'nsite' && !user) ||
+                    (selectedProvider.type === 'nsite' && nsiteForm.siteType === 'named' && !nsiteForm.dTag) ||
                     (selectedProvider.type === 'netlify' && !netlifyForm.siteId && !netlifyForm.siteName) ||
                     (selectedProvider.type === 'cloudflare' && !cloudflareForm.projectName) ||
                     (selectedProvider.type === 'deno' && !denoDeployForm.projectName) ||

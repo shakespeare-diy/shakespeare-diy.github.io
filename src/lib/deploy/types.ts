@@ -49,10 +49,21 @@ export interface VercelDeployConfig {
 export interface NsiteDeployConfig {
   fs: JSRuntimeFS;
   nostr: NPool;
-  nsec: string;
+  /** Nostr signer for the logged-in user — used to sign auth events and the manifest */
+  signer: NostrSigner;
   gateway: string;
   relayUrls: string[];
   blossomServers: string[];
+  /** Optional site title included as a ["title", ...] tag in the manifest */
+  siteTitle?: string;
+  /** Optional site description included as a ["description", ...] tag in the manifest */
+  siteDescription?: string;
+  /**
+   * Optional named-site identifier (the `d` tag value).
+   * When set → publishes kind 35128 (named site), URL = {base36pubkey}{identifier}.{gateway}
+   * When absent → publishes kind 15128 (root site), URL = {npub}.{gateway}
+   */
+  siteIdentifier?: string;
 }
 
 export interface CloudflareDeployConfig {

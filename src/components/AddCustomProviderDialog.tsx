@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
+import { UrlListEditor } from '@/components/UrlListEditor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -63,8 +64,8 @@ export function AddCustomProviderDialog({
   const [customHost, setCustomHost] = useState('');
   const [customProxy, setCustomProxy] = useState(false);
   const [customGateway, setCustomGateway] = useState('');
-  const [customRelayUrls, setCustomRelayUrls] = useState('');
-  const [customBlossomServers, setCustomBlossomServers] = useState('');
+  const [customRelayUrls, setCustomRelayUrls] = useState<string[]>([]);
+  const [customBlossomServers, setCustomBlossomServers] = useState<string[]>([]);
 
   const handleAdd = () => {
     if (!customProviderType || !customName.trim()) return;
@@ -84,12 +85,8 @@ export function AddCustomProviderDialog({
         type: 'nsite',
         name: customName.trim(),
         gateway: customGateway.trim() || 'nsite.lol',
-        relayUrls: customRelayUrls.trim()
-          ? customRelayUrls.split(',').map(s => s.trim()).filter(Boolean)
-          : ['wss://relay.ditto.pub'],
-        blossomServers: customBlossomServers.trim()
-          ? customBlossomServers.split(',').map(s => s.trim()).filter(Boolean)
-          : ['https://blossom.primal.net/'],
+        relayUrls: customRelayUrls.length > 0 ? customRelayUrls : ['wss://relay.ditto.pub'],
+        blossomServers: customBlossomServers.length > 0 ? customBlossomServers : ['https://blossom.primal.net/'],
       };
     } else if (customProviderType === 'netlify') {
       if (!customApiKey.trim()) return;
@@ -157,8 +154,8 @@ export function AddCustomProviderDialog({
     setCustomHost('');
     setCustomProxy(false);
     setCustomGateway('');
-    setCustomRelayUrls('');
-    setCustomBlossomServers('');
+    setCustomRelayUrls([]);
+    setCustomBlossomServers([]);
 
     onOpenChange(false);
   };
@@ -198,8 +195,8 @@ export function AddCustomProviderDialog({
                 setCustomHost('');
                 setCustomProxy(false);
                 setCustomGateway('');
-                setCustomRelayUrls('');
-                setCustomBlossomServers('');
+                setCustomRelayUrls([]);
+                setCustomBlossomServers([]);
               }}
             >
               <SelectTrigger>
@@ -249,7 +246,7 @@ export function AddCustomProviderDialog({
               ) : customProviderType === 'nsite' ? (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Deploy to Nostr as a static website. Uses kind 34128 events and Blossom file storage.
+                    Deploy to Nostr as a static website. Uses a kind 15128 site manifest event and Blossom file storage.
                   </p>
                   <div className="grid gap-2">
                     <Label htmlFor="custom-gateway">Gateway</Label>
@@ -260,24 +257,20 @@ export function AddCustomProviderDialog({
                       onChange={(e) => setCustomGateway(e.target.value)}
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="custom-relays">Relay URLs (comma-separated)</Label>
-                    <Input
-                      id="custom-relays"
-                      placeholder="wss://relay.ditto.pub, wss://relay.damus.io"
-                      value={customRelayUrls}
-                      onChange={(e) => setCustomRelayUrls(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="custom-blossom">Blossom Servers (comma-separated)</Label>
-                    <Input
-                      id="custom-blossom"
-                      placeholder="https://blossom.primal.net/"
-                      value={customBlossomServers}
-                      onChange={(e) => setCustomBlossomServers(e.target.value)}
-                    />
-                  </div>
+                  <UrlListEditor
+                    label="Relay URLs"
+                    items={customRelayUrls}
+                    onChange={setCustomRelayUrls}
+                    protocol="wss"
+                    placeholder="relay.ditto.pub"
+                  />
+                  <UrlListEditor
+                    label="Blossom Servers"
+                    items={customBlossomServers}
+                    onChange={setCustomBlossomServers}
+                    protocol="https"
+                    placeholder="blossom.primal.net"
+                  />
                 </>
               ) : (
                 <>

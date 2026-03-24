@@ -1,107 +1,173 @@
 import { useState, useEffect, useRef } from 'react';
-import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
-import { nip19 } from 'nostr-tools';
+import { AlertCircle, Globe, Tag } from 'lucide-react';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { PasswordInput } from '@/components/ui/password-input';
-import { RefreshCw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface NsiteDeployFormProps {
-  gateway: string;
+  /** Human-readable project name — used to default the title for named sites */
+  projectName: string;
+  /** Persisted values from a previous deployment */
+  savedSiteTitle?: string;
+  savedSiteDescription?: string;
+  savedSiteType?: 'named' | 'root';
+  /** Present only when the project was previously deployed with a dedicated keypair (v1) */
   savedNsec?: string;
-  onNsecChange: (nsec: string) => void;
+  onSiteTitleChange: (title: string) => void;
+  onSiteDescriptionChange: (description: string) => void;
+  onSiteTypeChange: (type: 'named' | 'root') => void;
 }
 
 export function NsiteDeployForm({
-  gateway,
+  projectName,
+  savedSiteTitle,
+  savedSiteDescription,
+  savedSiteType,
   savedNsec,
-  onNsecChange,
+  onSiteTitleChange,
+  onSiteDescriptionChange,
+  onSiteTypeChange,
 }: NsiteDeployFormProps) {
-  const [nsec, setNsec] = useState(savedNsec || '');
-  const [npub, setNpub] = useState('');
-  const initialized = useRef(false);
+  const [siteType, setSiteType] = useState<'named' | 'root'>(savedSiteType ?? 'named');
+  const [siteTitle, setSiteTitle] = useState(
+    savedSiteTitle ?? (savedSiteType === 'root' ? '' : projectName),
+  );
+  const [siteDescription, setSiteDescription] = useState(savedSiteDescription ?? '');
 
-  // Initialize nsec on mount
+  // On mount: sync all saved values to parent and set defaults.
+  // The component is keyed by selectedProviderId in DeploySteps, so this always
+  // runs with fresh props — no initialized guard needed.
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true;
-      if (savedNsec) {
-        // If we have a saved nsec, notify parent immediately
-        onNsecChange(savedNsec);
-      } else if (!nsec) {
-        // Generate a new nsec if none exists
-        const sk = generateSecretKey();
-        const newNsec = nip19.nsecEncode(sk);
-        setNsec(newNsec);
-        onNsecChange(newNsec);
-      }
-    }
-  }, [savedNsec, nsec, onNsecChange]);
+    if (savedSiteType) onSiteTypeChange(savedSiteType);
+    if (savedSiteDescription) onSiteDescriptionChange(savedSiteDescription);
 
-  // Update npub when nsec changes
+    const initialTitle = savedSiteTitle ?? (siteType === 'named' ? projectName : '');
+    if (initialTitle !== siteTitle) setSiteTitle(initialTitle);
+    onSiteTitleChange(initialTitle);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When the user switches site type, update the title default only if
+  // the current title still matches the previous type's auto-fill value.
+  const prevSiteTypeRef = useRef(siteType);
   useEffect(() => {
-    if (nsec) {
-      try {
-        const decoded = nip19.decode(nsec);
-        if (decoded.type === 'nsec') {
-          const pk = getPublicKey(decoded.data);
-          const npubEncoded = nip19.npubEncode(pk);
-          setNpub(npubEncoded);
-        }
-      } catch {
-        setNpub('');
-      }
-    }
-  }, [nsec]);
+    const prev = prevSiteTypeRef.current;
+    prevSiteTypeRef.current = siteType;
+    if (prev === siteType) return;
 
-  const handleNsecChange = (value: string) => {
-    setNsec(value);
-    onNsecChange(value);
+    if (siteType === 'named' && siteTitle === '') {
+      setSiteTitle(projectName);
+      onSiteTitleChange(projectName);
+    } else if (siteType === 'root' && siteTitle === projectName) {
+      setSiteTitle('');
+      onSiteTitleChange('');
+    }
+  }, [siteType, siteTitle, projectName, onSiteTitleChange]);
+
+  const handleSiteTypeChange = (value: 'named' | 'root') => {
+    setSiteType(value);
+    onSiteTypeChange(value);
   };
 
-  const handleGenerateNew = () => {
-    const sk = generateSecretKey();
-    const newNsec = nip19.nsecEncode(sk);
-    setNsec(newNsec);
-    onNsecChange(newNsec);
+  const handleSiteTitleChange = (value: string) => {
+    setSiteTitle(value);
+    onSiteTitleChange(value);
   };
 
-  const fullDomain = npub ? `${npub}.${gateway}` : `npub1...${gateway}`;
+  const handleSiteDescriptionChange = (value: string) => {
+    setSiteDescription(value);
+    onSiteDescriptionChange(value);
+  };
 
   return (
     <div className="space-y-4">
+
+      {/* Migration notice */}
+      {savedNsec && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Site identity is changing.</strong> This project was previously deployed with a
+            dedicated private key. Going forward, it will deploy under your Nostr identity. The old
+            site will remain at its original address until overwritten.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Site type */}
       <div className="space-y-2">
-        <Label>Site URL</Label>
-        <p className="text-sm font-mono bg-muted p-2 rounded-md break-all">
-          {fullDomain}
-        </p>
+        <Label>Site Type</Label>
+        <RadioGroup
+          value={siteType}
+          onValueChange={handleSiteTypeChange}
+          className="space-y-2"
+        >
+          <div className="flex items-start gap-3 p-3 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="named" id="nsite-type-named" className="mt-0.5" />
+            <label htmlFor="nsite-type-named" className="flex-1 cursor-pointer">
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <Tag className="h-3.5 w-3.5" />
+                Named site
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                A site with a unique identifier. You can have many named sites.
+              </p>
+            </label>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-md border cursor-pointer hover:bg-muted/50 transition-colors">
+            <RadioGroupItem value="root" id="nsite-type-root" className="mt-0.5" />
+            <label htmlFor="nsite-type-root" className="flex-1 cursor-pointer">
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <Globe className="h-3.5 w-3.5" />
+                Root site
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your personal site at your npub address. You can only have one.
+              </p>
+            </label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {/* Root site warning */}
+      {siteType === 'root' && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            You only have one root site per Nostr identity. Deploying here will replace any
+            existing root site published under your key.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Site title */}
+      <div className="space-y-2">
+        <Label htmlFor="nsite-title">Site Title</Label>
+        <Input
+          id="nsite-title"
+          value={siteTitle}
+          onChange={(e) => handleSiteTitleChange(e.target.value)}
+          placeholder="My Nostr Site"
+        />
         <p className="text-xs text-muted-foreground">
-          Each site has a unique Nostr keypair
+          Shown by nsite gateways and directories. Included as a title tag in the manifest.
         </p>
       </div>
 
+      {/* Site description */}
       <div className="space-y-2">
-        <Label htmlFor="nsite-nsec">Site Private Key (nsec)</Label>
-        <div className="flex gap-2">
-          <PasswordInput
-            id="nsite-nsec"
-            value={nsec}
-            onChange={(e) => handleNsecChange(e.target.value)}
-            placeholder="nsec1..."
-            className="flex-1"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={handleGenerateNew}
-            title="Generate new key"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
+        <Label htmlFor="nsite-description">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Textarea
+          id="nsite-description"
+          value={siteDescription}
+          onChange={(e) => handleSiteDescriptionChange(e.target.value)}
+          placeholder="A short description of this site…"
+          rows={3}
+        />
         <p className="text-xs text-muted-foreground">
-          Keep this private key secure. It's used to sign site metadata.
+          Included as a description tag in the manifest.
         </p>
       </div>
     </div>
