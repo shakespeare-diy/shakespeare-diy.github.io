@@ -17,6 +17,7 @@ import {
 import type { DeployProvider } from '@/contexts/DeploySettingsContext';
 import type { PresetDeployProvider } from '@/lib/deploy/types';
 import { ExternalFavicon } from '@/components/ExternalFavicon';
+import { UrlListEditor } from '@/components/UrlListEditor';
 
 interface ProviderConfigDialogProps {
   open: boolean;
@@ -138,34 +139,22 @@ export function ProviderConfigDialog({
                   onChange={(e) => setLocalProvider({ ...localProvider, gateway: e.target.value })}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="provider-relays">
-                  Relay URLs (comma-separated) <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="provider-relays"
-                  placeholder="wss://relay.ditto.pub, wss://relay.damus.io"
-                  value={localProvider.relayUrls?.join(', ') || ''}
-                  onChange={(e) => setLocalProvider({
-                    ...localProvider,
-                    relayUrls: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                  })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="provider-blossom">
-                  Blossom Servers (comma-separated) <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="provider-blossom"
-                  placeholder="https://blossom.primal.net/"
-                  value={localProvider.blossomServers?.join(', ') || ''}
-                  onChange={(e) => setLocalProvider({
-                    ...localProvider,
-                    blossomServers: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                  })}
-                />
-              </div>
+              <UrlListEditor
+                label="Relay URLs"
+                items={localProvider.relayUrls ?? []}
+                onChange={(urls) => setLocalProvider({ ...localProvider, relayUrls: urls })}
+                protocol="wss"
+                placeholder="relay.ditto.pub"
+                required
+              />
+              <UrlListEditor
+                label="Blossom Servers"
+                items={localProvider.blossomServers ?? []}
+                onChange={(servers) => setLocalProvider({ ...localProvider, blossomServers: servers })}
+                protocol="https"
+                placeholder="blossom.primal.net"
+                required
+              />
             </>
           ) : (
             <>
