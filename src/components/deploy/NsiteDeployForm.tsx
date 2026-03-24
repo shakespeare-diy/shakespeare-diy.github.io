@@ -1,75 +1,51 @@
 import { useState, useEffect, useRef } from 'react';
-import { nip19 } from 'nostr-tools';
 import { AlertCircle, Globe, Tag } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { projectNameToDTag, isValidDTag, pubkeyToBase36 } from '@/lib/utils/nsite';
 
 interface NsiteDeployFormProps {
-  gateway: string;
-  /** Human-readable project name — used to derive the default dTag and title */
+  /** Human-readable project name — used to default the title for named sites */
   projectName: string;
-  /** Hex pubkey of the logged-in user — used for URL preview */
-  userPubkey?: string;
   /** Persisted values from a previous deployment */
   savedSiteTitle?: string;
   savedSiteDescription?: string;
-  savedDTag?: string;
   savedSiteType?: 'named' | 'root';
   /** Present only when the project was previously deployed with a dedicated keypair (v1) */
   savedNsec?: string;
   onSiteTitleChange: (title: string) => void;
   onSiteDescriptionChange: (description: string) => void;
-  onDTagChange: (dTag: string) => void;
   onSiteTypeChange: (type: 'named' | 'root') => void;
 }
 
 export function NsiteDeployForm({
-  gateway,
   projectName,
-  userPubkey,
   savedSiteTitle,
   savedSiteDescription,
-  savedDTag,
   savedSiteType,
   savedNsec,
   onSiteTitleChange,
   onSiteDescriptionChange,
-  onDTagChange,
   onSiteTypeChange,
 }: NsiteDeployFormProps) {
   const [siteType, setSiteType] = useState<'named' | 'root'>(savedSiteType ?? 'named');
-  const [dTag, setDTag] = useState(savedDTag ?? '');
   const [siteTitle, setSiteTitle] = useState(
     savedSiteTitle ?? (savedSiteType === 'root' ? '' : projectName),
   );
   const [siteDescription, setSiteDescription] = useState(savedSiteDescription ?? '');
-  const [previewUrl, setPreviewUrl] = useState('');
 
-  // On mount: sync all saved values to parent; derive dTag and title defaults when absent.
-  // The component is keyed by selectedProviderId in DeploySteps, so this effect always
+  // On mount: sync all saved values to parent and set defaults.
+  // The component is keyed by selectedProviderId in DeploySteps, so this always
   // runs with fresh props — no initialized guard needed.
   useEffect(() => {
     if (savedSiteType) onSiteTypeChange(savedSiteType);
     if (savedSiteDescription) onSiteDescriptionChange(savedSiteDescription);
 
-    // Title: use saved value, else default to projectName for named sites only
     const initialTitle = savedSiteTitle ?? (siteType === 'named' ? projectName : '');
     if (initialTitle !== siteTitle) setSiteTitle(initialTitle);
     onSiteTitleChange(initialTitle);
-
-    // dTag: use saved value, else derive from project name
-    if (savedDTag) {
-      onDTagChange(savedDTag);
-    } else {
-      projectNameToDTag(projectName).then(derived => {
-        setDTag(derived);
-        onDTagChange(derived);
-      });
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -82,45 +58,17 @@ export function NsiteDeployForm({
     if (prev === siteType) return;
 
     if (siteType === 'named' && siteTitle === '') {
-      // Switching to named with a blank title → fill with project name
       setSiteTitle(projectName);
       onSiteTitleChange(projectName);
     } else if (siteType === 'root' && siteTitle === projectName) {
-      // Switching to root and title is still the auto-filled project name → clear it
       setSiteTitle('');
       onSiteTitleChange('');
     }
   }, [siteType, siteTitle, projectName, onSiteTitleChange]);
 
-  // Recompute preview URL whenever relevant state changes
-  useEffect(() => {
-    if (!userPubkey) {
-      setPreviewUrl('');
-      return;
-    }
-    if (siteType === 'root') {
-      const npub = nip19.npubEncode(userPubkey);
-      setPreviewUrl(`https://${npub}.${gateway}`);
-    } else if (dTag && isValidDTag(dTag)) {
-      const base36 = pubkeyToBase36(userPubkey);
-      setPreviewUrl(`https://${base36}${dTag}.${gateway}`);
-    } else {
-      setPreviewUrl('');
-    }
-  }, [userPubkey, siteType, dTag, gateway]);
-
   const handleSiteTypeChange = (value: 'named' | 'root') => {
     setSiteType(value);
     onSiteTypeChange(value);
-  };
-
-  const handleDTagChange = (value: string) => {
-    // Allow lowercase alphanumeric and hyphens; strip everything else.
-    // Leading/trailing hyphens and consecutive hyphens are caught by isValidDTag
-    // and shown as a validation error rather than silently removed while typing.
-    const clean = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    setDTag(clean);
-    onDTagChange(clean);
   };
 
   const handleSiteTitleChange = (value: string) => {
@@ -132,8 +80,6 @@ export function NsiteDeployForm({
     setSiteDescription(value);
     onSiteDescriptionChange(value);
   };
-
-  const dTagInvalid = siteType === 'named' && dTag.length > 0 && !isValidDTag(dTag);
 
   return (
     <div className="space-y-4">
@@ -166,7 +112,7 @@ export function NsiteDeployForm({
                 Named site
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                A site with a custom identifier. You can have many named sites.
+                A site with a unique identifier. You can have many named sites.
               </p>
             </label>
           </div>
@@ -185,30 +131,6 @@ export function NsiteDeployForm({
         </RadioGroup>
       </div>
 
-      {/* Named site identifier */}
-      {siteType === 'named' && (
-        <div className="space-y-2">
-          <Label htmlFor="nsite-dtag">Site Identifier</Label>
-          <Input
-            id="nsite-dtag"
-            value={dTag}
-            onChange={(e) => handleDTagChange(e.target.value)}
-            placeholder="myblog"
-            maxLength={13}
-            className={dTagInvalid ? 'border-destructive' : ''}
-          />
-          {dTagInvalid ? (
-            <p className="text-xs text-destructive">
-              Must be 1–13 lowercase letters, digits, or hyphens. Cannot start or end with a hyphen.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Lowercase letters, digits, and hyphens, max 13 characters.
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Root site warning */}
       {siteType === 'root' && (
         <Alert>
@@ -218,16 +140,6 @@ export function NsiteDeployForm({
             existing root site published under your key.
           </AlertDescription>
         </Alert>
-      )}
-
-      {/* Live URL preview */}
-      {previewUrl && (
-        <div className="space-y-1">
-          <Label>Site URL</Label>
-          <p className="text-sm font-mono bg-muted p-2 rounded-md break-all">
-            {previewUrl}
-          </p>
-        </div>
       )}
 
       {/* Site title */}

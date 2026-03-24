@@ -38,6 +38,7 @@ import { DenoDeployAdapter } from '@/lib/deploy/DenoDeployAdapter';
 import { RailwayAdapter } from '@/lib/deploy/RailwayAdapter';
 import { readNsiteVfsConfig, writeNsiteVfsConfig } from '@/lib/nsiteConfig';
 import type { NsiteVfsConfig } from '@/lib/nsiteConfig';
+import { projectNameToDTag } from '@/lib/utils/nsite';
 
 /**
  * Normalize a URL string to ensure it has a protocol
@@ -522,14 +523,15 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
 
   const handleNsiteSiteTitleChange = useCallback((siteTitle: string) => {
     setNsiteForm(prev => ({ ...prev, siteTitle }));
-  }, []);
+    // Derive the dTag from the title so the user never has to think about it.
+    // Falls back to projectName when the title is blank.
+    projectNameToDTag(siteTitle || projectName).then(dTag => {
+      setNsiteForm(prev => ({ ...prev, dTag }));
+    });
+  }, [projectName]);
 
   const handleNsiteSiteDescriptionChange = useCallback((siteDescription: string) => {
     setNsiteForm(prev => ({ ...prev, siteDescription }));
-  }, []);
-
-  const handleNsiteDTagChange = useCallback((dTag: string) => {
-    setNsiteForm(prev => ({ ...prev, dTag }));
   }, []);
 
   const handleNsiteSiteTypeChange = useCallback((siteType: 'named' | 'root') => {
@@ -636,9 +638,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
       // .nsite/config.json wins; .git/shakespeare/deploy.json is the legacy fallback
       const savedSiteTitle       = nsiteVfsConfig?.title       ?? legacy?.siteTitle;
       const savedSiteDescription = nsiteVfsConfig?.description ?? legacy?.siteDescription;
-      const savedDTag = (nsiteVfsConfig?.id != null && nsiteVfsConfig.id !== '')
-        ? nsiteVfsConfig.id
-        : legacy?.dTag;
       const savedSiteType = nsiteVfsConfig
         ? (nsiteVfsConfig.id === null ? 'root' : 'named')
         : legacy?.siteType;
@@ -647,17 +646,13 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
         <div className="space-y-3">
           <NsiteDeployForm
             key={selectedProviderId}
-            gateway={selectedProvider.gateway}
             projectName={projectName || projectId}
-            userPubkey={user?.pubkey}
             savedNsec={legacy?.nsec}
             savedSiteTitle={savedSiteTitle}
             savedSiteDescription={savedSiteDescription}
-            savedDTag={savedDTag}
             savedSiteType={savedSiteType}
             onSiteTitleChange={handleNsiteSiteTitleChange}
             onSiteDescriptionChange={handleNsiteSiteDescriptionChange}
-            onDTagChange={handleNsiteDTagChange}
             onSiteTypeChange={handleNsiteSiteTypeChange}
           />
           {nsiteVfsConfig && (
