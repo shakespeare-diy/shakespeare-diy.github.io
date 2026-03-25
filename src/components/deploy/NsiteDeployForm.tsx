@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { AlertCircle, Globe, Tag } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -39,15 +39,22 @@ export function NsiteDeployForm({
   // On mount: sync all saved values to parent and set defaults.
   // The component is keyed by selectedProviderId in DeploySteps, so this always
   // runs with fresh props — no initialized guard needed.
-  useEffect(() => {
+  const initializedRef = useRef(false);
+  const stableSyncToParent = useCallback(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     if (savedSiteType) onSiteTypeChange(savedSiteType);
     if (savedSiteDescription) onSiteDescriptionChange(savedSiteDescription);
 
     const initialTitle = savedSiteTitle ?? (siteType === 'named' ? projectName : '');
     if (initialTitle !== siteTitle) setSiteTitle(initialTitle);
     onSiteTitleChange(initialTitle);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [savedSiteType, savedSiteDescription, savedSiteTitle, siteType, siteTitle, projectName, onSiteTypeChange, onSiteDescriptionChange, onSiteTitleChange]);
+
+  useEffect(() => {
+    stableSyncToParent();
+  }, [stableSyncToParent]);
 
   // When the user switches site type, update the title default only if
   // the current title still matches the previous type's auto-fill value.

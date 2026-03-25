@@ -1,4 +1,4 @@
-import type { NostrSigner, NPool } from '@nostrify/nostrify';
+import type { NostrSigner } from '@nostrify/nostrify';
 import mime from 'mime';
 import { nip19 } from 'nostr-tools';
 import type { JSRuntimeFS } from '../JSRuntime';
