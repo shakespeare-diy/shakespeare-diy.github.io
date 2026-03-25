@@ -188,6 +188,7 @@ export class NsiteAdapter implements DeployAdapter {
   private blossomServers: string[];
   private siteTitle?: string;
   private siteDescription?: string;
+  private sourceUrl?: string;
   private siteIdentifier?: string;
 
   constructor(config: NsiteDeployConfig) {
@@ -199,6 +200,7 @@ export class NsiteAdapter implements DeployAdapter {
     this.blossomServers = config.blossomServers;
     this.siteTitle = config.siteTitle;
     this.siteDescription = config.siteDescription;
+    this.sourceUrl = config.sourceUrl;
     this.siteIdentifier = config.siteIdentifier;
   }
 
@@ -307,6 +309,10 @@ export class NsiteAdapter implements DeployAdapter {
 
     if (this.siteDescription) {
       tags.push(['description', this.siteDescription]);
+    }
+
+    if (this.sourceUrl) {
+      tags.push(['source', this.sourceUrl]);
     }
 
     const manifestEvent = await this.signer.signEvent({

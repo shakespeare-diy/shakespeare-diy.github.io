@@ -58,6 +58,8 @@ export interface NsiteDeployConfig {
   siteTitle?: string;
   /** Optional site description included as a ["description", ...] tag in the manifest */
   siteDescription?: string;
+  /** Optional source repository location included as a ["source", ...] tag in the manifest */
+  sourceUrl?: string;
   /**
    * Optional named-site identifier (the `d` tag value).
    * When set → publishes kind 35128 (named site), URL = {base36pubkey}{identifier}.{gateway}
