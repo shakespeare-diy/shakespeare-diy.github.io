@@ -50,6 +50,23 @@ function normalizeUrl(url: string): string {
   return `https://${url}`;
 }
 
+async function resolveNsiteSourceUrl(remoteUrl: string | null): Promise<string | undefined> {
+  if (!remoteUrl) {
+    return undefined;
+  }
+
+  if (/^https?:\/\//i.test(remoteUrl)) {
+    return remoteUrl;
+  }
+
+  if (remoteUrl.startsWith('nostr://')) {
+    const nostrURI = await NostrURI.parse(remoteUrl);
+    return nostrURI.toString();
+  }
+
+  return undefined;
+}
+
 /**
  * Render provider icon using favicon or fallback
  */
@@ -252,6 +269,10 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
           throw new Error('You must be logged in to deploy to nsite.');
         }
 
+        const sourceUrl = await resolveNsiteSourceUrl(
+          await git.getRemoteURL(projectPath, 'origin')
+        );
+
         adapter = new NsiteAdapter({
           fs,
           nostr,
@@ -261,6 +282,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
           blossomServers: nsiteProvider.blossomServers,
           siteTitle: nsiteForm.siteTitle || undefined,
           siteDescription: nsiteForm.siteDescription || undefined,
+          sourceUrl,
           siteIdentifier: nsiteForm.siteType === 'named' && nsiteForm.dTag
             ? nsiteForm.dTag
             : undefined,
@@ -593,8 +615,8 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
         const siteLabel = isRoot
           ? 'Root site'
           : nsiteVfsConfig.id
-          ? `Named site: ${nsiteVfsConfig.id}`
-          : 'Named site';
+            ? `Named site: ${nsiteVfsConfig.id}`
+            : 'Named site';
         const relayCount = nsiteVfsConfig.relays?.length ?? 0;
         const serverCount = nsiteVfsConfig.servers?.length ?? 0;
 
