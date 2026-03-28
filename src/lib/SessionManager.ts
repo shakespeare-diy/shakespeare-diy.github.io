@@ -4,7 +4,7 @@ import type { JSRuntimeFS } from './JSRuntime';
 import { DotAI } from './DotAI';
 import { parseProviderModel } from './parseProviderModel';
 import { createAIClient } from './ai-client';
-import type { Tool } from './tools/Tool';
+import type { Tool, ToolResultImage } from './tools/Tool';
 import type { NUser } from '@nostrify/react/login';
 import type { AIProvider } from '@/contexts/AISettingsContext';
 import { makeSystemPrompt } from './system';
@@ -656,6 +656,11 @@ export class SessionManager {
               const result = await tool.execute(toolArgs);
               await this.addToolMessage(projectId, functionToolCall.id, result.content);
 
+              // If tool returned images, inject a user message so the AI can "see" them
+              if (result.images?.length) {
+                await this.addToolImageMessage(projectId, result.images);
+              }
+
               // Update session cost if tool returned a cost
               if (result.cost !== undefined) {
                 const updatedSession = this.sessions.get(projectId);
@@ -797,6 +802,25 @@ export class SessionManager {
     };
 
     await this.addMessage(projectId, toolMessage);
+  }
+
+  /**
+   * Helper to inject a user message with images from tool results.
+   * Since tool messages only support text content, images are sent
+   * as a follow-up user message so vision models can actually see them.
+   */
+  private async addToolImageMessage(projectId: string, images: ToolResultImage[]): Promise<void> {
+    const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = images.map((img) => ({
+      type: 'image_url' as const,
+      image_url: { url: img.url },
+    }));
+
+    const imageMessage: AIMessage = {
+      role: 'user',
+      content,
+    };
+
+    await this.addMessage(projectId, imageMessage);
   }
 
   /**

@@ -86,10 +86,15 @@ Usage:
         const base64 = this.arrayBufferToBase64(bytes);
         const ext = this.getFileExtension(filepath).toLowerCase();
         const mimeType = this.getMimeType(ext);
+        const dataUrl = `data:${mimeType};base64,${base64}`;
+
+        // For vision-supported formats (JPG/PNG), return as a structured image
+        // so the AI can actually "see" the image
+        const isVisionSupported = ['jpg', 'jpeg', 'png'].includes(ext);
         
-        // Return base64 data URL in the content
         return {
-          content: `[Image file: ${ext.toUpperCase()} file]\n\nImage read successfully.\n\nData URL: data:${mimeType};base64,${base64}`,
+          content: `[Image file: ${ext.toUpperCase()} file]\n\nImage read successfully.${!isVisionSupported ? `\n\nData URL: ${dataUrl}` : ''}`,
+          images: isVisionSupported ? [{ type: 'image' as const, url: dataUrl }] : undefined,
         };
       }
 
