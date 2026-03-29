@@ -87,6 +87,48 @@ export default function Clone() {
     description: t('cloneGitRepository'),
   });
 
+  /** Convert GitHub/GitLab web URLs to git clone URLs (append .git if needed). */
+  const normalizeGitUrl = (url: string): string => {
+    const trimmed = url.trim();
+
+    // Don't touch Nostr URIs or non-HTTP URLs
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    try {
+      const parsed = new URL(trimmed);
+      const host = parsed.hostname.toLowerCase();
+
+      // Only normalize GitHub and GitLab URLs
+      if (host !== 'github.com' && host !== 'gitlab.com' && !host.endsWith('.github.com') && !host.endsWith('.gitlab.com')) {
+        return trimmed;
+      }
+
+      // Strip trailing slash and common web UI suffixes
+      let pathname = parsed.pathname.replace(/\/+$/, '');
+      pathname = pathname.replace(/\/(tree|blob|commits|issues|merge_requests|pulls|releases|tags|branches|settings|pipelines|actions)(\/.*)?$/, '');
+
+      // Need at least /owner/repo
+      const segments = pathname.split('/').filter(Boolean);
+      if (segments.length < 2) {
+        return trimmed;
+      }
+
+      // Take only owner/repo (first two segments)
+      const repoPath = `/${segments[0]}/${segments[1]}`;
+
+      // Already ends with .git — keep as-is
+      if (repoPath.endsWith('.git')) {
+        return `${parsed.protocol}//${parsed.host}${repoPath}`;
+      }
+
+      return `${parsed.protocol}//${parsed.host}${repoPath}.git`;
+    } catch {
+      return trimmed;
+    }
+  };
+
   const extractRepoName = async (url: string): Promise<string> => {
     try {
       const cleanUrl = url.trim();
@@ -137,7 +179,7 @@ export default function Clone() {
   }, []);
 
   const handleClone = useCallback(async (url?: string) => {
-    const targetUrl = url || repoUrl;
+    const targetUrl = normalizeGitUrl(url || repoUrl);
 
     if (!targetUrl.trim()) {
       setError(t('pleaseEnterRepositoryUrl'));
