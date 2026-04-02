@@ -49,6 +49,7 @@ import { WebSearchTool } from '@/lib/tools/WebSearchTool';
 import { createMCPTools } from '@/lib/tools/MCPTool';
 import { TodoWriteTool } from '@/lib/tools/TodoWriteTool';
 import { TodoReadTool } from '@/lib/tools/TodoReadTool';
+import { AppTool } from '@/lib/tools/AppTool';
 import { ProjectPreviewConsoleError } from '@/lib/consoleMessages';
 import { toolToOpenAI } from '@/lib/tools/openai-adapter';
 import { Tool } from '@/lib/tools/Tool';
@@ -230,6 +231,13 @@ export const ChatPane = forwardRef<ChatPaneRef, ChatPaneProps>(({
       websearch: new WebSearchTool(),
       todowrite: new TodoWriteTool(fs, projectId, { projectsPath }),
       todoread: new TodoReadTool(fs, projectId, { projectsPath }),
+      app: new AppTool(
+        fs,
+        cwd,
+        user?.signer,
+        user?.pubkey,
+        config.relayMetadata.relays.filter(r => r.write).map(r => r.url),
+      ),
     };
 
     // Add generate_image tool if imageModel is configured
@@ -281,7 +289,7 @@ export const ChatPane = forwardRef<ChatPaneRef, ChatPaneProps>(({
     }
 
     return tools;
-  }, [fs, git, cwd, user, projectsPath, tmpPath, config.corsProxy, settings, aiSettings, models, handleFileChanged, handleCommit, projectId, availableSkills]);
+  }, [fs, git, cwd, user, projectsPath, tmpPath, config.corsProxy, config.relayMetadata, settings, aiSettings, models, handleFileChanged, handleCommit, projectId, availableSkills]);
 
   // MCP tools wrapped for execution
   const mcpToolWrappers = useMemo(() => createMCPTools(mcpClients), [mcpClients]);

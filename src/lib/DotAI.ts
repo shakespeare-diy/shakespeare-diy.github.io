@@ -393,4 +393,47 @@ export class DotAI {
       console.warn(`Failed to write .git/ai/FINISH_REASON file: ${error}`);
     }
   }
+
+  /**
+   * Read app config from .git/shakespeare/app.json file.
+   * Stores the Nostr "a" coordinate for the project's kind 31990 app event.
+   * @returns App config object or null if not found or invalid
+   */
+  async readAppConfig(): Promise<AppConfig | null> {
+    try {
+      const appPath = join(this.workingDir, ".git", "shakespeare", "app.json");
+      const content = await this.fs.readFile(appPath, "utf8");
+      const data = JSON.parse(content);
+
+      if (data && typeof data.a === 'string' && data.a.length > 0) {
+        return { a: data.a };
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Write app config to .git/shakespeare/app.json file.
+   * @param config App config with the Nostr "a" coordinate (e.g. "31990:<pubkey>:<d-tag>")
+   */
+  async writeAppConfig(config: AppConfig): Promise<void> {
+    const shakespeareDir = join(this.workingDir, ".git", "shakespeare");
+    const appPath = join(shakespeareDir, "app.json");
+
+    try {
+      await this.fs.mkdir(shakespeareDir, { recursive: true });
+      await this.fs.writeFile(appPath, JSON.stringify(config, null, 2) + "\n");
+    } catch (error) {
+      console.warn(`Failed to write .git/shakespeare/app.json file: ${error}`);
+    }
+  }
+}
+
+/** App config stored in .git/shakespeare/app.json */
+export interface AppConfig {
+  /** Nostr "a" coordinate for the kind 31990 event (e.g. "31990:<pubkey>:<d-tag>") */
+  a: string;
 }

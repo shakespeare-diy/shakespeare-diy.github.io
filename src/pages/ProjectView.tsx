@@ -8,6 +8,7 @@ import { PreviewPane } from '@/components/Shakespeare/PreviewPane';
 import { ProjectSidebar } from '@/components/ProjectSidebar';
 import { ProjectDetailsDialog } from '@/components/ProjectDetailsDialog';
 import { DeleteProjectDialog } from '@/components/DeleteProjectDialog';
+import { AppDialog } from '@/components/AppDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,6 +45,7 @@ export function ProjectView() {
   const [gitHistoryOpen, setGitHistoryOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [appDialogOpen, setAppDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Use console error state from provider
@@ -217,6 +219,7 @@ export function ProjectView() {
                     onDuplicate={() => setDuplicateDialogOpen(true)}
                     onDelete={() => setDeleteDialogOpen(true)}
                     onProjectDetails={() => setIsProjectDetailsOpen(true)}
+                    onApp={() => setAppDialogOpen(true)}
                     isAnyLoading={isAnyLoading || isDeleting}
                     className="text-base"
                   />
@@ -446,6 +449,7 @@ export function ProjectView() {
                             onDuplicate={() => setDuplicateDialogOpen(true)}
                             onDelete={() => setDeleteDialogOpen(true)}
                             onProjectDetails={() => setIsProjectDetailsOpen(true)}
+                            onApp={() => setAppDialogOpen(true)}
                             isAnyLoading={isAnyLoading || isDeleting}
                             className="text-lg"
                           />
@@ -556,6 +560,11 @@ export function ProjectView() {
             isDeleting={isDeleting}
             open={deleteDialogOpen}
             onOpenChange={setDeleteDialogOpen}
+          />
+          <AppDialog
+            projectId={project.id}
+            open={appDialogOpen}
+            onOpenChange={setAppDialogOpen}
           />
         </>
       )}

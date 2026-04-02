@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Trash2,
   Star,
+  AppWindow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -27,6 +28,7 @@ interface ProjectTitleMenuProps {
   onDuplicate: () => void;
   onDelete: () => void;
   onProjectDetails: () => void;
+  onApp: () => void;
   isAnyLoading: boolean;
   className?: string;
 }
@@ -39,6 +41,7 @@ export function ProjectTitleMenu({
   onDuplicate,
   onDelete,
   onProjectDetails,
+  onApp,
   isAnyLoading,
   className = '',
 }: ProjectTitleMenuProps) {
@@ -96,6 +99,15 @@ export function ProjectTitleMenu({
         >
           <Folder className="h-4 w-4" />
           Project Details
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onClick={onApp}
+          disabled={isAnyLoading}
+          className="gap-2"
+        >
+          <AppWindow className="h-4 w-4" />
+          App
         </DropdownMenuItem>
 
         <DropdownMenuItem

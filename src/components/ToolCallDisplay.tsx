@@ -28,6 +28,7 @@ import {
   X,
   Search,
   Clipboard,
+  AppWindow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VFSImage } from '@/components/VFSImage';
@@ -409,6 +410,25 @@ function getToolInfo(toolName: string, args: Record<string, unknown>, projectId?
         title,
         callingTitle: toolName === 'todowrite' ? 'Updating todo list' : 'Viewing todo list',
         errorTitle: toolName === 'todowrite' ? 'Failed to update todo list' : 'Failed to view todo list',
+      };
+    }
+
+    case 'app': {
+      const action = args.action as string | undefined;
+      if (action === 'view_app') {
+        return {
+          icon: AppWindow,
+          title: 'Viewed app',
+          callingTitle: 'Viewing app',
+          errorTitle: 'Failed to view app',
+        };
+      }
+      const name = args.name ? String(args.name) : 'app';
+      return {
+        icon: AppWindow,
+        title: `Updated ${name}`,
+        callingTitle: `Updating ${name}`,
+        errorTitle: `Failed to update ${name}`,
       };
     }
 
