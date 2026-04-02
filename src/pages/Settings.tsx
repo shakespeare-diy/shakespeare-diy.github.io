@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { getSettingsCategories } from '@/lib/settingsItems';
@@ -34,9 +34,9 @@ export function Settings() {
           </div>
         ))}
         {import.meta.env.VERSION && (
-          <div className="text-center text-xs text-muted-foreground/60 pt-4">
-            v{import.meta.env.VERSION}
-          </div>
+          <Link to="/changelog" className="block text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors select-none pt-4 pb-2">
+            v{import.meta.env.VERSION}{import.meta.env.COMMIT_TAG ? '' : '+'} ({new Date(import.meta.env.BUILD_DATE).toLocaleDateString()})
+          </Link>
         )}
       </div>
     );
