@@ -1,4 +1,5 @@
 import git from 'isomorphic-git';
+import { DotAI } from './DotAI';
 import { NostrURI } from './NostrURI';
 import type { JSRuntimeFS } from './JSRuntime';
 
@@ -63,6 +64,20 @@ export async function buildAppEvent(
         }
         tags.push(webTag);
       }
+    }
+  }
+
+  // Add t-tags for categorization (shakespeare + template name)
+  if (opts?.fs && opts.cwd) {
+    tags.push(['t', 'shakespeare']);
+    try {
+      const dotAI = new DotAI(opts.fs, opts.cwd);
+      const template = await dotAI.readTemplate();
+      if (template) {
+        tags.push(['t', template.name.toLowerCase()]);
+      }
+    } catch {
+      // Template not found, skip
     }
   }
 
