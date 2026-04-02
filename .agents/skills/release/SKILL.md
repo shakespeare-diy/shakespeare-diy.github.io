@@ -27,7 +27,7 @@ Follow these steps in order. Do NOT skip any step.
 Before writing any release notes, you MUST read these pages to understand the product context, voice, and values:
 
 1. **https://soapbox.pub/** -- Soapbox company overview and product suite
-2. **https://shakespeare.diy/** -- Shakespeare product page
+2. **https://soapbox.pub/shakespeare/** -- Shakespeare product page
 
 These pages define what Shakespeare is, how it's positioned, and the tone of voice to use. Changelog entries should reflect this identity: creative, empowering, user-focused, emphasizing building and self-expression. Avoid dry technical jargon -- write for people who use the app, not developers.
 
