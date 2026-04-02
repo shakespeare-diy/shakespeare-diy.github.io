@@ -8,7 +8,6 @@ import { Suspense, useEffect } from 'react';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import NostrProvider from '@/components/NostrProvider';
 import { NostrSync } from '@/components/NostrSync';
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NostrLoginProvider } from '@nostrify/react/login';
 import { AppProvider } from '@/components/AppProvider';
@@ -30,7 +29,7 @@ import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LockdownModeDetector } from '@/components/LockdownModeDetector';
-import { VersionCheck } from '@/components/VersionCheck';
+
 
 import AppRouter from './AppRouter';
 
@@ -149,11 +148,9 @@ export function App() {
                               <GitSyncProvider>
                                 <SessionManagerProvider>
                                   <TooltipProvider>
-                                    <Toaster />
                                     <DynamicFavicon />
                                     <OfflineIndicator />
                                     <PWAUpdatePrompt />
-                                    <VersionCheck />
                                     <LockdownModeDetector />
                                     <Suspense>
                                       <AppRouter />

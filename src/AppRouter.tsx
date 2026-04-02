@@ -1,7 +1,9 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Toaster } from "./components/ui/toaster";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { SessionMonitor } from "./components/SessionMonitor";
 import { URLFragmentHandler } from "./components/URLFragmentHandler";
+import { VersionCheck } from "./components/VersionCheck";
 
 import Index from "./pages/Index";
 import Clone from "./pages/Clone";
@@ -28,6 +30,8 @@ import { ChangelogPage } from "./pages/ChangelogPage";
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <Toaster />
+      <VersionCheck />
       <ScrollToTop />
       <SessionMonitor />
       <URLFragmentHandler />
