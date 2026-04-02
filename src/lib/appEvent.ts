@@ -98,18 +98,12 @@ export async function buildAppEvent(
     }
   }
 
-  // If an nsite deployment exists, add an "a" tag referencing the site manifest event
+  // If an nsite deployment exists, add an "a" tag referencing the kind 35128 site manifest event
   if (opts?.fs && opts.cwd && opts.pubkey) {
     try {
       const nsiteConfig = await readNsiteVfsConfig(opts.fs, opts.cwd);
-      if (nsiteConfig) {
-        if (nsiteConfig.id) {
-          // Named site: kind 35128 addressable event
-          tags.push(['a', `35128:${opts.pubkey}:${nsiteConfig.id}`]);
-        } else {
-          // Root site: kind 15128 replaceable event
-          tags.push(['a', `15128:${opts.pubkey}:`]);
-        }
+      if (nsiteConfig?.id) {
+        tags.push(['a', `35128:${opts.pubkey}:${nsiteConfig.id}`]);
       }
     } catch {
       // No nsite config found, skip

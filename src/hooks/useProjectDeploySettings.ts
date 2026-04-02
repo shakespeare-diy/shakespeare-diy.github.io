@@ -16,13 +16,12 @@ const nsiteProjectConfigSchema = z.object({
   url: z.string(),
   data: z.object({
     /** Kept optional — only present on configs created before the signer migration */
-    /** Kept optional — only present on configs created before the signer migration */
     nsec: z.string().optional(),
     siteTitle: z.string().optional(),
     siteDescription: z.string().optional(),
-    /** Named-site dTag identifier (kind 35128). Absent → root site (kind 15128). */
+    /** Named-site dTag identifier (kind 35128). */
     dTag: z.string().optional(),
-    /** 'named' | 'root'. Absent on legacy configs — treated as 'named' by the form. */
+    /** @deprecated — Shakespeare always deploys named sites now. Kept for backward compat. */
     siteType: z.enum(['named', 'root']).optional(),
   }),
 });

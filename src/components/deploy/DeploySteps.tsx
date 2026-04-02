@@ -108,7 +108,6 @@ interface NsiteFormData {
   siteTitle: string;
   siteDescription: string;
   dTag: string;
-  siteType: 'named' | 'root';
 }
 
 interface NetlifyFormData {
@@ -174,12 +173,10 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
         // If a config already exists, seed the form from it and stay in summary mode.
         // If not, show the full form so the user can configure for the first time.
         if (cfg) {
-          const derivedSiteType = cfg.id === null ? 'root' : 'named';
           setNsiteForm({
             siteTitle: cfg.title ?? '',
             siteDescription: cfg.description ?? '',
             dTag: (cfg.id != null && cfg.id !== '') ? cfg.id : '',
-            siteType: derivedSiteType,
           });
           setNsiteShowFullForm(false);
         } else {
@@ -197,7 +194,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
     siteTitle: '',
     siteDescription: '',
     dTag: '',
-    siteType: 'named',
   });
   const [netlifyForm, setNetlifyForm] = useState<NetlifyFormData>({
     siteId: '',
@@ -283,9 +279,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
           siteTitle: nsiteForm.siteTitle || undefined,
           siteDescription: nsiteForm.siteDescription || undefined,
           sourceUrl,
-          siteIdentifier: nsiteForm.siteType === 'named' && nsiteForm.dTag
-            ? nsiteForm.dTag
-            : undefined,
+          siteIdentifier: nsiteForm.dTag || undefined,
         });
       } else if (selectedProvider.type === 'netlify') {
         const netlifyProvider = selectedProvider;
@@ -397,7 +391,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
             siteTitle: nsiteForm.siteTitle || undefined,
             siteDescription: nsiteForm.siteDescription || undefined,
             dTag: nsiteForm.dTag || undefined,
-            siteType: nsiteForm.siteType,
           },
         });
 
@@ -407,7 +400,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
         const newNsiteVfsConfig: NsiteVfsConfig = {
           relays: nsiteProvider.relayUrls,
           servers: nsiteProvider.blossomServers,
-          id: nsiteForm.siteType === 'root' ? null : (nsiteForm.dTag || undefined),
+          id: nsiteForm.dTag || undefined,
           title: nsiteForm.siteTitle || undefined,
           description: nsiteForm.siteDescription || undefined,
           fallback: '/index.html',
@@ -524,7 +517,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
     setError(null);
     // Reset forms
     setShakespeareForm({ subdomain: projectId });
-    setNsiteForm({ siteTitle: '', siteDescription: '', dTag: '', siteType: 'named' });
+    setNsiteForm({ siteTitle: '', siteDescription: '', dTag: '' });
     setNetlifyForm({ siteId: '', siteName: '' });
     setVercelForm({ projectName: projectName || projectId, teamId: '' });
     setCloudflareForm({ projectName: projectName || projectId });
@@ -554,10 +547,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
 
   const handleNsiteSiteDescriptionChange = useCallback((siteDescription: string) => {
     setNsiteForm(prev => ({ ...prev, siteDescription }));
-  }, []);
-
-  const handleNsiteSiteTypeChange = useCallback((siteType: 'named' | 'root') => {
-    setNsiteForm(prev => ({ ...prev, siteType }));
   }, []);
 
   const handleNetlifySiteChange = useCallback((siteId: string, siteName: string) => {
@@ -611,12 +600,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
 
       // Summary view: shown when .nsite/config.json already exists and user hasn't clicked Edit
       if (nsiteVfsConfig && !nsiteShowFullForm) {
-        const isRoot = nsiteVfsConfig.id === null;
-        const siteLabel = isRoot
-          ? 'Root site'
-          : nsiteVfsConfig.id
-            ? `Named site: ${nsiteVfsConfig.id}`
-            : 'Named site';
         const relayCount = nsiteVfsConfig.relays?.length ?? 0;
         const serverCount = nsiteVfsConfig.servers?.length ?? 0;
 
@@ -629,10 +612,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
                   <span className="font-medium">{nsiteVfsConfig.title}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Type</span>
-                <span className="font-medium">{siteLabel}</span>
-              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Relays</span>
                 <span className="font-medium">{relayCount} configured</span>
@@ -660,9 +639,6 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
       // .nsite/config.json wins; .git/shakespeare/deploy.json is the legacy fallback
       const savedSiteTitle       = nsiteVfsConfig?.title       ?? legacy?.siteTitle;
       const savedSiteDescription = nsiteVfsConfig?.description ?? legacy?.siteDescription;
-      const savedSiteType = nsiteVfsConfig
-        ? (nsiteVfsConfig.id === null ? 'root' : 'named')
-        : legacy?.siteType;
 
       return (
         <div className="space-y-3">
@@ -672,10 +648,8 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
             savedNsec={legacy?.nsec}
             savedSiteTitle={savedSiteTitle}
             savedSiteDescription={savedSiteDescription}
-            savedSiteType={savedSiteType}
             onSiteTitleChange={handleNsiteSiteTitleChange}
             onSiteDescriptionChange={handleNsiteSiteDescriptionChange}
-            onSiteTypeChange={handleNsiteSiteTypeChange}
           />
           {nsiteVfsConfig && (
             <button
@@ -977,7 +951,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
                     (selectedProvider.type === 'shakespeare' && !user) ||
                     (selectedProvider.type === 'shakespeare' && !isShakespeareFormValid) ||
                     (selectedProvider.type === 'nsite' && !user) ||
-                    (selectedProvider.type === 'nsite' && nsiteForm.siteType === 'named' && !nsiteForm.dTag) ||
+                    (selectedProvider.type === 'nsite' && !nsiteForm.dTag) ||
                     (selectedProvider.type === 'netlify' && !netlifyForm.siteId && !netlifyForm.siteName) ||
                     (selectedProvider.type === 'cloudflare' && !cloudflareForm.projectName) ||
                     (selectedProvider.type === 'deno' && !denoDeployForm.projectName) ||
