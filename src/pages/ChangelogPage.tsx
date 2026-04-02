@@ -120,7 +120,7 @@ function LatestRelease({ entry }: { entry: ChangelogEntry }) {
         href={`${GITLAB_REPO}/-/releases/v${entry.version}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="block text-2xl font-bold tracking-tight hover:underline"
+        className="block text-2xl font-bold tracking-tight hover:underline px-4"
       >
         v{entry.version}
       </a>
@@ -128,7 +128,7 @@ function LatestRelease({ entry }: { entry: ChangelogEntry }) {
         href={`${GITLAB_REPO}/-/releases/v${entry.version}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 px-4"
       >
         {formatDate(entry.date)}
       </a>
@@ -138,7 +138,7 @@ function LatestRelease({ entry }: { entry: ChangelogEntry }) {
         <ul
           ref={contentRef}
           style={!expanded && overflows ? { maxHeight: ENTRY_MAX_HEIGHT, overflow: 'hidden' } : undefined}
-          className="space-y-2.5"
+          className="px-4 space-y-2.5"
         >
           {entry.sections.flatMap((section) => {
             const style = CATEGORY_STYLES[section.category] ?? CATEGORY_STYLES.Changed;
