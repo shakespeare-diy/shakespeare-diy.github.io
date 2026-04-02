@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
 import path from "node:path";
 
@@ -5,15 +6,26 @@ import react from "@vitejs/plugin-react-swc";
 import { defineConfig } from "vitest/config";
 import { VitePWA } from 'vite-plugin-pwa';
 
-function getVersion(): string {
+const require = createRequire(import.meta.url);
+const pkg = require("./package.json") as { version: string };
+
+/** Short commit SHA — prefer CI env var, fall back to git. */
+function getCommitSha(): string {
+  if (process.env.CI_COMMIT_SHORT_SHA) return process.env.CI_COMMIT_SHORT_SHA;
   try {
-    const gitCommit = execSync('git rev-parse --short HEAD').toString().trim();
-    const commitTimestamp = execSync('git log -1 --format=%ct').toString().trim();
-    const commitDate = new Date(parseInt(commitTimestamp) * 1000);
-    const utcDate = commitDate.toISOString().split('T')[0].replace(/-/g, '.');
-    return `${utcDate}+${gitCommit}`;
+    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
   } catch {
-    return new Date().toISOString().split('T')[0].replace(/-/g, '.');
+    return "";
+  }
+}
+
+/** Git tag for the current commit — prefer CI env var, fall back to git. Empty string if untagged. */
+function getCommitTag(): string {
+  if (process.env.CI_COMMIT_TAG) return process.env.CI_COMMIT_TAG;
+  try {
+    return execSync("git describe --exact-match --tags HEAD 2>/dev/null", { encoding: "utf-8" }).trim();
+  } catch {
+    return "";
   }
 }
 
@@ -24,7 +36,10 @@ export default defineConfig(() => ({
     port: 8080,
   },
   define: {
-    'import.meta.env.VERSION': JSON.stringify(getVersion()),
+    'import.meta.env.VERSION': JSON.stringify(pkg.version),
+    'import.meta.env.BUILD_DATE': JSON.stringify(new Date().toISOString()),
+    'import.meta.env.COMMIT_SHA': JSON.stringify(getCommitSha()),
+    'import.meta.env.COMMIT_TAG': JSON.stringify(getCommitTag()),
   },
   plugins: [
     react(),

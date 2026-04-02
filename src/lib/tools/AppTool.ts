@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NPool, NRelay1 } from '@nostrify/nostrify';
-import type { NostrEvent, NostrSigner } from '@nostrify/nostrify';
+import type { NostrSigner } from '@nostrify/nostrify';
 
 import { DotAI } from '../DotAI';
 import { buildAppEvent } from '../appEvent';

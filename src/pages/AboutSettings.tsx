@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info, ExternalLink, Loader2, AlertTriangle, Code, Globe } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Info, ExternalLink, Loader2, AlertTriangle, Code, Globe, ScrollText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SettingsPageLayout } from '@/components/SettingsPageLayout';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -97,6 +98,22 @@ export function AboutSettings() {
           </AccordionItem>
         </Accordion>
 
+        {/* Changelog */}
+        <Card>
+          <CardContent className="p-0">
+            <Button
+              variant="ghost"
+              className="w-full h-12 flex items-center gap-2 justify-start text-base"
+              asChild
+            >
+              <Link to="/changelog">
+                <ScrollText className="!size-5 text-muted-foreground" />
+                {t('changelog')}
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Project Information */}
         <Card>
           <CardContent className="p-0">
@@ -148,9 +165,9 @@ export function AboutSettings() {
       </div>
 
       {import.meta.env.VERSION && (
-        <div className="text-center text-xs text-muted-foreground/60 pt-4">
-          v{import.meta.env.VERSION}
-        </div>
+        <Link to="/changelog" className="block text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors select-none pt-4 pb-2">
+          v{import.meta.env.VERSION}{import.meta.env.COMMIT_TAG ? '' : '+'} ({new Date(import.meta.env.BUILD_DATE).toLocaleDateString()})
+        </Link>
       )}
     </SettingsPageLayout>
   );

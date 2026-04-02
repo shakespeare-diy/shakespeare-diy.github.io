@@ -239,6 +239,7 @@
   "aboutShakespeareDescription": "Information about Shakespeare",
   "mirrors": "Mirrors",
   "mirrorsDescription": "Shakespeare is available at multiple mirror URLs for redundancy and accessibility.",
+  "changelog": "Changelog",
   "sourceCode": "Source Code",
   "description": "Description",
   "license": "License",

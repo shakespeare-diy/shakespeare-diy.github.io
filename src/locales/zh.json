@@ -276,6 +276,7 @@
   "aboutShakespeareDescription": "关于Shakespeare的信息。",
   "mirrors": "镜像",
   "mirrorsDescription": "Shakespeare可通过多个镜像URL访问，以确保冗余和可访问性。",
+  "changelog": "更新日志",
   "sourceCode": "源代码",
   "description": "描述",
   "license": "许可证",

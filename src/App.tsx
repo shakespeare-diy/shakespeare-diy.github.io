@@ -30,6 +30,7 @@ import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { LockdownModeDetector } from '@/components/LockdownModeDetector';
+import { VersionCheck } from '@/components/VersionCheck';
 
 import AppRouter from './AppRouter';
 
@@ -152,6 +153,7 @@ export function App() {
                                     <DynamicFavicon />
                                     <OfflineIndicator />
                                     <PWAUpdatePrompt />
+                                    <VersionCheck />
                                     <LockdownModeDetector />
                                     <Suspense>
                                       <AppRouter />
