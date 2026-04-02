@@ -56,7 +56,7 @@ export function ChangelogPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mr-auto">
         <div className="flex items-center gap-3 mb-6">
           <ScrollText className="size-6 text-primary" />
           <h1 className="text-2xl font-bold">Changelog</h1>
@@ -120,7 +120,7 @@ function LatestRelease({ entry }: { entry: ChangelogEntry }) {
         href={`${GITLAB_REPO}/-/releases/v${entry.version}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="block text-center text-2xl font-bold tracking-tight hover:underline"
+        className="block text-2xl font-bold tracking-tight hover:underline"
       >
         v{entry.version}
       </a>
@@ -128,7 +128,7 @@ function LatestRelease({ entry }: { entry: ChangelogEntry }) {
         href={`${GITLAB_REPO}/-/releases/v${entry.version}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
       >
         {formatDate(entry.date)}
       </a>
