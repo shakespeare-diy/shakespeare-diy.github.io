@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Shakespeare</string>
+    <string name="title_activity_main">Shakespeare</string>
+    <string name="package_name">diy.shakespeare.app</string>
+    <string name="custom_url_scheme">diy.shakespeare.app</string>
+</resources>
