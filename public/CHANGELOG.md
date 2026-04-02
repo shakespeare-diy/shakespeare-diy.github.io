@@ -1,5 +1,15 @@
 # Changelog
 
+## [9.10.0] - 2026-04-02
+
+### Added
+- Android app powered by Capacitor with deep links, splash screen, and signed release builds
+- CI pipeline for building APKs, publishing to GitLab releases, and distributing via Zapstore
+- Nsite deployment for decentralized hosting via Nostr
+
+### Changed
+- Make version number on mobile settings a clickable link to the changelog with build date
+
 ## [9.9.2] - 2026-04-02
 
 ### Changed
