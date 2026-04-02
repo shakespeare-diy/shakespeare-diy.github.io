@@ -1,0 +1,39 @@
+repository: https://gitlab.com/soapbox-pub/shakespeare
+
+name: Shakespeare
+
+summary: Build custom apps with AI, right from your browser.
+
+description: |
+  Shakespeare is an open-source AI-powered app builder. Describe what you
+  want to build in natural language, and AI will help you create it — all
+  within your browser.
+
+  Features:
+  - AI chat — build apps through conversation with AI assistants
+  - Live preview — see your app update in real time as you build
+  - Virtual filesystem — full project files stored in-browser via IndexedDB
+  - Git integration — version control with isomorphic-git, clone templates
+  - Nostr login — authenticate with your Nostr identity
+  - Multiple AI providers — configure OpenAI-compatible providers and API keys
+  - Project management — create, import, and manage multiple projects
+  - ZIP import — import existing projects from ZIP files
+
+tags:
+  - nostr
+  - ai
+  - development
+  - builder
+
+license: AGPL-3.0
+
+website: https://shakespeare.diy
+
+icon: ./public/shakespeare-512x512.png
+
+images: []
+
+release_notes: ./CHANGELOG.md
+
+metadata_sources:
+  - gitlab
