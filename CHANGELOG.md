@@ -1,6 +1,6 @@
 # Changelog
 
-## [9.9.0] - 2026-04-02
+## [9.9.1] - 2026-04-02
 
 ### Added
 - Changelog page and versioning system with "What's new" toast notifications on updates

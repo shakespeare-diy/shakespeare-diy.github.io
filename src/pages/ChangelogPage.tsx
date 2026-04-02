@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useSeoMeta } from '@unhead/react';
-import { ArrowLeft, Bug, FlaskConical, Minus, Package, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
+import { Bug, FlaskConical, Minus, Package, Plus, RefreshCw, ScrollText, ShieldAlert } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { AppLayout } from '@/components/AppLayout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { parseChangelog } from '@/lib/changelog';
@@ -56,49 +55,44 @@ export function ChangelogPage() {
   const latestVersion = entries[0]?.version;
 
   return (
-    <main className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
-            <Link to="/settings/about">
-              <ArrowLeft className="size-4" />
-            </Link>
-          </Button>
-          <h1 className="text-lg font-semibold">Changelog</h1>
+    <AppLayout>
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <ScrollText className="size-6 text-primary" />
+          <h1 className="text-2xl font-bold">Changelog</h1>
+        </div>
+
+        <div className="space-y-4">
+          {error ? (
+            <p className="text-sm text-muted-foreground pt-4">Failed to load changelog.</p>
+          ) : content === null ? (
+            <ChangelogSkeleton />
+          ) : entries.length === 0 ? (
+            <p className="text-sm text-muted-foreground pt-4">No releases yet.</p>
+          ) : (
+            <>
+              {isPreRelease && latestVersion && <PreReleaseBanner latestVersion={latestVersion} />}
+
+              <LatestRelease entry={entries[0]} />
+
+              {entries.length > 1 && (
+                <>
+                  <div className="flex items-center gap-3 pt-4 pb-1">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Past releases</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+
+                  {entries.slice(1).map((entry) => (
+                    <ChangelogEntryCard key={entry.version} entry={entry} />
+                  ))}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
-
-      <div className="max-w-2xl mx-auto px-4 pt-3 pb-16 space-y-4">
-        {error ? (
-          <p className="text-sm text-muted-foreground pt-4">Failed to load changelog.</p>
-        ) : content === null ? (
-          <ChangelogSkeleton />
-        ) : entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground pt-4">No releases yet.</p>
-        ) : (
-          <>
-            {isPreRelease && latestVersion && <PreReleaseBanner latestVersion={latestVersion} />}
-
-            <LatestRelease entry={entries[0]} />
-
-            {entries.length > 1 && (
-              <>
-                <div className="flex items-center gap-3 pt-4 pb-1">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Past releases</span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-
-                {entries.slice(1).map((entry) => (
-                  <ChangelogEntryCard key={entry.version} entry={entry} />
-                ))}
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </main>
+    </AppLayout>
   );
 }
 
@@ -120,7 +114,7 @@ function LatestRelease({ entry }: { entry: ChangelogEntry }) {
   }, [measure]);
 
   return (
-    <div className="pt-2 pb-1 px-4">
+    <div className="pt-2 pb-1">
       {/* Big centered version + date */}
       <a
         href={`${GITLAB_REPO}/-/releases/v${entry.version}`}

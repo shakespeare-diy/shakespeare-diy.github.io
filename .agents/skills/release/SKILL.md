@@ -9,7 +9,7 @@ This skill guides you through publishing a new release of the app. It handles ve
 
 ## Overview
 
-- **Version format**: Marketing version (X.Y.Z), starting from 9.9.0. **This is NOT semver.** Version numbers are chosen based on how the release looks to end users, not based on API compatibility or breaking changes. Think of it like an app store version -- the number reflects the perceived significance of the update to a regular user.
+- **Version format**: Marketing version (X.Y.Z), starting from 9.9.1. **This is NOT semver.** Version numbers are chosen based on how the release looks to end users, not based on API compatibility or breaking changes. Think of it like an app store version -- the number reflects the perceived significance of the update to a regular user.
 - **Version source of truth**: `package.json` `version` field
 - **Changelog**: `CHANGELOG.md` in repo root, using [Keep a Changelog](https://keepachangelog.com/) format
 - **Version bumping**:

@@ -277,6 +277,7 @@
   "mirrors": "Espelhos",
   "mirrorsDescription": "Shakespeare está disponível em vários URLs espelhados para redundância e acessibilidade.",
   "changelog": "Registro de alterações",
+  "changelogDescription": "Veja as novidades em cada versão do Shakespeare.",
   "sourceCode": "Código-fonte",
   "description": "Descrição",
   "license": "Licença",

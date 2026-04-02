@@ -83,6 +83,7 @@ export const getSettingsCategories = (t: (key: string) => string): SettingsCateg
         title: t('aboutShakespeare'),
         href: '/settings/about',
       },
+
     ],
   },
 ];

@@ -240,6 +240,7 @@
   "mirrors": "Mirrors",
   "mirrorsDescription": "Shakespeare is available at multiple mirror URLs for redundancy and accessibility.",
   "changelog": "Changelog",
+  "changelogDescription": "See what's new in each release of Shakespeare.",
   "sourceCode": "Source Code",
   "description": "Description",
   "license": "License",

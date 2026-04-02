@@ -277,6 +277,7 @@
   "mirrors": "镜像",
   "mirrorsDescription": "Shakespeare可通过多个镜像URL访问，以确保冗余和可访问性。",
   "changelog": "更新日志",
+  "changelogDescription": "查看Shakespeare每个版本的更新内容。",
   "sourceCode": "源代码",
   "description": "描述",
   "license": "许可证",
