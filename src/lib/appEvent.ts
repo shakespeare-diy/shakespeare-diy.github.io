@@ -1,6 +1,7 @@
 import git from 'isomorphic-git';
 import { DotAI } from './DotAI';
 import { NostrURI } from './NostrURI';
+import { readNsiteVfsConfig } from './nsiteConfig';
 import type { JSRuntimeFS } from './JSRuntime';
 
 /** Input for building a kind 31990 app event. */
@@ -94,6 +95,24 @@ export async function buildAppEvent(
       }
     } catch {
       // No remote or parse error, skip
+    }
+  }
+
+  // If an nsite deployment exists, add an "a" tag referencing the site manifest event
+  if (opts?.fs && opts.cwd && opts.pubkey) {
+    try {
+      const nsiteConfig = await readNsiteVfsConfig(opts.fs, opts.cwd);
+      if (nsiteConfig) {
+        if (nsiteConfig.id) {
+          // Named site: kind 35128 addressable event
+          tags.push(['a', `35128:${opts.pubkey}:${nsiteConfig.id}`]);
+        } else {
+          // Root site: kind 15128 replaceable event
+          tags.push(['a', `15128:${opts.pubkey}:`]);
+        }
+      }
+    } catch {
+      // No nsite config found, skip
     }
   }
 
