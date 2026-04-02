@@ -57,6 +57,9 @@ deploy-nsite:
     - npm run build
     - cp dist/index.html dist/404.html
 
+    # Remove sourcemaps to stay under nsite's 65KB manifest limit
+    - find dist -name '*.map' -delete
+
     # Download nsyte binary
     - curl -fsSL "https://github.com/sandwichfarm/nsyte/releases/download/${NSYTE_VERSION}/nsyte-linux" -o /usr/local/bin/nsyte
     - chmod +x /usr/local/bin/nsyte
