@@ -522,12 +522,10 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="npub">npub</SelectItem>
-                          <SelectItem value="nsec">nsec</SelectItem>
                           <SelectItem value="note">note</SelectItem>
                           <SelectItem value="nprofile">nprofile</SelectItem>
                           <SelectItem value="nevent">nevent</SelectItem>
                           <SelectItem value="naddr">naddr</SelectItem>
-                          <SelectItem value="nrelay">nrelay</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button
