@@ -82,13 +82,16 @@ export async function buildAppEvent(
     }
   }
 
-  // Add t-tags for categorization (shakespeare + template name)
+  // Add t-tags for categorization (shakespeare + template name), skipping duplicates
   if (opts?.fs && opts.cwd) {
-    tags.push(['t', 'shakespeare']);
+    const existingTTags = new Set(input.tTags?.map(t => t.trim().toLowerCase()) ?? []);
+    if (!existingTTags.has('shakespeare')) {
+      tags.push(['t', 'shakespeare']);
+    }
     try {
       const dotAI = new DotAI(opts.fs, opts.cwd);
       const template = await dotAI.readTemplate();
-      if (template) {
+      if (template && !existingTTags.has(template.name.toLowerCase())) {
         tags.push(['t', template.name.toLowerCase()]);
       }
     } catch {
