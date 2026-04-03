@@ -110,6 +110,84 @@ function emptyFormData(projectId: string): AppFormData {
   };
 }
 
+/** Read a file from VFS as a UTF-8 string, returning null if it doesn't exist. */
+async function readVfsText(fs: { readFile(path: string, options: { encoding: string }): Promise<string> }, path: string): Promise<string | null> {
+  try {
+    return await fs.readFile(path, { encoding: 'utf8' });
+  } catch {
+    return null;
+  }
+}
+
+/** Extract OG/meta tag content from HTML text. */
+function parseMetaContent(html: string, property: string): string | null {
+  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']+)["']`, 'i');
+  const alt = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${property}["']`, 'i');
+  return (re.exec(html) ?? alt.exec(html))?.[1] ?? null;
+}
+
+/** Scrape autofill candidates from the project's built output and source files. */
+async function scrapeProjectMeta(
+  fs: { readFile(path: string, options: { encoding: string }): Promise<string> },
+  cwd: string,
+): Promise<Partial<{ name: string; about: string; picture: string; banner: string }>> {
+  const result: Partial<{ name: string; about: string; picture: string; banner: string }> = {};
+
+  // 1. Try dist/index.html for OG tags
+  const html = await readVfsText(fs, `${cwd}/dist/index.html`);
+  if (html) {
+    const ogTitle = parseMetaContent(html, 'og:title');
+    const ogDesc = parseMetaContent(html, 'og:description') ?? parseMetaContent(html, 'description');
+    const ogImage = parseMetaContent(html, 'og:image');
+    const ogBanner = parseMetaContent(html, 'og:image:banner') ?? parseMetaContent(html, 'twitter:image');
+
+    if (ogTitle) result.name = ogTitle;
+    if (ogDesc) result.about = ogDesc;
+    if (ogImage) result.picture = ogImage;
+    if (ogBanner) result.banner = ogBanner;
+  }
+
+  // 2. Try web manifest for name, description, and icons
+  const manifestPaths = [
+    `${cwd}/public/manifest.webmanifest`,
+    `${cwd}/public/manifest.json`,
+    `${cwd}/dist/manifest.webmanifest`,
+    `${cwd}/dist/manifest.json`,
+  ];
+
+  for (const path of manifestPaths) {
+    const text = await readVfsText(fs, path);
+    if (!text) continue;
+    try {
+      const manifest = JSON.parse(text);
+      if (!result.name && (manifest.name || manifest.short_name)) {
+        result.name = manifest.name ?? manifest.short_name;
+      }
+      if (!result.about && manifest.description) {
+        result.about = manifest.description;
+      }
+      if (!result.picture && Array.isArray(manifest.icons) && manifest.icons.length > 0) {
+        // Prefer the largest icon
+        const sorted = [...manifest.icons].sort((a, b) => {
+          const sizeA = parseInt(a.sizes?.split('x')[0] ?? '0');
+          const sizeB = parseInt(b.sizes?.split('x')[0] ?? '0');
+          return sizeB - sizeA;
+        });
+        const iconSrc = sorted[0]?.src;
+        if (iconSrc) {
+          // If it's an absolute URL use it directly, otherwise it's a relative VFS path
+          result.picture = iconSrc.startsWith('http') ? iconSrc : iconSrc;
+        }
+      }
+      break;
+    } catch {
+      // Invalid JSON, try next
+    }
+  }
+
+  return result;
+}
+
 export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const { fs } = useFS();
   const { projectsPath } = useFSPaths();
@@ -156,6 +234,20 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
       setFormData(prev => ({ ...prev, website: deployedUrl }));
     }
   }, [hasApp, isDeployLoading, deployedUrl, formData.website]);
+
+  // Auto-fill form from OG tags / web manifest when opening for the first time
+  useEffect(() => {
+    if (!open || hasApp || isLoading) return;
+    scrapeProjectMeta(fs, cwd).then(meta => {
+      setFormData(prev => ({
+        ...prev,
+        name: prev.name && prev.name !== toTitleCase(projectId) ? prev.name : (meta.name ?? prev.name),
+        about: prev.about || meta.about || '',
+        picture: prev.picture || meta.picture || '',
+        banner: prev.banner || meta.banner || '',
+      }));
+    }).catch(() => {/* silently ignore */});
+  }, [open, hasApp, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateField = useCallback(<K extends keyof AppFormData>(key: K, value: AppFormData[K]) => {
     setFormData(prev => ({ ...prev, [key]: value }));
