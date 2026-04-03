@@ -45,21 +45,18 @@ fi
 BG_COLOR="#2b0037"   # Shakespeare purple
 
 TMPDIR=$(mktemp -d)
-LOGO_WHITE_SVG="$TMPDIR/logo_white.svg"
-LOGO_WHITE="$TMPDIR/logo_white.png"
+LOGO_COLOR="$TMPDIR/logo_color.png"
 
-# Recolor the SVG fills to white before rasterizing.
-sed -E 's/fill:#[0-9A-Fa-f]{6}/fill:#ffffff/g' "$SOURCE_SVG" > "$LOGO_WHITE_SVG"
-
-echo "Rendering white SVG at 512x512..."
+# Render the original colorful SVG at high resolution for downscaling.
+echo "Rendering colorful SVG at 512x512..."
 
 if [ "$SVG_RENDERER" = "inkscape" ]; then
-    inkscape --export-type=png --export-filename="$LOGO_WHITE" -w 512 -h 512 "$LOGO_WHITE_SVG" 2>/dev/null
+    inkscape --export-type=png --export-filename="$LOGO_COLOR" -w 512 -h 512 "$SOURCE_SVG" 2>/dev/null
 else
-    rsvg-convert -w 512 -h 512 "$LOGO_WHITE_SVG" -o "$LOGO_WHITE"
+    rsvg-convert -w 512 -h 512 "$SOURCE_SVG" -o "$LOGO_COLOR"
 fi
 
-# ── Adaptive icon foreground PNGs (transparent bg, white logo, safe-zone padding) ──
+# ── Adaptive icon foreground PNGs (transparent bg, colorful logo, safe-zone padding) ──
 # Content at 47% of canvas to fit within Android's adaptive icon safe zone.
 
 echo "Generating adaptive foreground PNGs..."
@@ -69,7 +66,7 @@ make_foreground() {
     local content_size=$(echo "$size * 47 / 100" | bc)
     local dest=$2
     $MAGICK -size "${size}x${size}" "xc:none" \
-        \( "$LOGO_WHITE" -resize "${content_size}x${content_size}" \) \
+        \( "$LOGO_COLOR" -resize "${content_size}x${content_size}" \) \
         -gravity center -compose over -composite \
         "$dest"
 }
@@ -82,8 +79,7 @@ make_foreground 192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foregrou
 
 # ── Legacy launcher icons (ic_launcher.png and ic_launcher_round.png) ──
 # These are used on pre-API-26 devices and as fallback on some launchers.
-# They must have the logo composited onto the purple background — NOT just
-# a solid color fill.
+# They must have the logo composited onto the purple background.
 
 echo "Generating legacy launcher icons (ic_launcher.png and ic_launcher_round.png)..."
 
@@ -93,7 +89,7 @@ make_legacy_square() {
     local content_size=$(echo "$size * 60 / 100" | bc)
     local dest=$2
     $MAGICK -size "${size}x${size}" "xc:${BG_COLOR}" \
-        \( "$LOGO_WHITE" -resize "${content_size}x${content_size}" \) \
+        \( "$LOGO_COLOR" -resize "${content_size}x${content_size}" \) \
         -gravity center -compose over -composite \
         "$dest"
 }
@@ -111,7 +107,7 @@ make_legacy_round() {
     # Fill purple, apply circle mask, composite logo
     $MAGICK -size "${size}x${size}" "xc:${BG_COLOR}" \
         "$mask" -compose dst-in -composite \
-        \( "$LOGO_WHITE" -resize "${content_size}x${content_size}" \) \
+        \( "$LOGO_COLOR" -resize "${content_size}x${content_size}" \) \
         -gravity center -compose over -composite \
         "$dest"
 }
@@ -138,7 +134,37 @@ cat > "$BACKGROUND_COLOR_FILE" << 'EOF'
 </resources>
 EOF
 
-# ── iOS App Icon (1024x1024, white logo on purple background) ──
+# ── Splash screen PNGs (logo centered on purple background) ──
+# These are the legacy splash screens used by the Capacitor splash screen plugin.
+# Logo is sized to ~25% of the shorter dimension, centered on solid purple.
+
+echo "Generating splash screen PNGs..."
+
+make_splash() {
+    local w=$1
+    local h=$2
+    local dest=$3
+    local shorter=$(( w < h ? w : h ))
+    local logo_size=$(echo "$shorter * 25 / 100" | bc)
+    $MAGICK -size "${w}x${h}" "xc:${BG_COLOR}" \
+        \( "$LOGO_COLOR" -resize "${logo_size}x${logo_size}" \) \
+        -gravity center -compose over -composite \
+        "$dest"
+}
+
+make_splash 480  320  android/app/src/main/res/drawable/splash.png
+make_splash 320  480  android/app/src/main/res/drawable-port-mdpi/splash.png
+make_splash 480  800  android/app/src/main/res/drawable-port-hdpi/splash.png
+make_splash 720  1280 android/app/src/main/res/drawable-port-xhdpi/splash.png
+make_splash 960  1600 android/app/src/main/res/drawable-port-xxhdpi/splash.png
+make_splash 1280 1920 android/app/src/main/res/drawable-port-xxxhdpi/splash.png
+make_splash 480  320  android/app/src/main/res/drawable-land-mdpi/splash.png
+make_splash 800  480  android/app/src/main/res/drawable-land-hdpi/splash.png
+make_splash 1280 720  android/app/src/main/res/drawable-land-xhdpi/splash.png
+make_splash 1600 960  android/app/src/main/res/drawable-land-xxhdpi/splash.png
+make_splash 1920 1280 android/app/src/main/res/drawable-land-xxxhdpi/splash.png
+
+# ── iOS App Icon (1024x1024, colorful logo on purple background) ──
 
 echo "Generating iOS app icon..."
 
@@ -146,9 +172,9 @@ IOS_ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
 
 if [ -d "$IOS_ICON_DIR" ]; then
     IOS_ICON="$IOS_ICON_DIR/AppIcon-512@2x.png"
-    # Logo at ~60% of canvas, centered on purple background (matches legacy Android style)
+    # Logo at ~60% of canvas, centered on purple background
     $MAGICK -size "1024x1024" "xc:${BG_COLOR}" \
-        \( "$LOGO_WHITE" -resize "614x614" \) \
+        \( "$LOGO_COLOR" -resize "614x614" \) \
         -gravity center -compose over -composite \
         "$IOS_ICON"
     echo -e "  ${GREEN}✓${NC} $IOS_ICON"
@@ -160,11 +186,12 @@ fi
 rm -rf "$TMPDIR"
 
 echo -e "\n${GREEN}App icons generated successfully!${NC}"
-echo -e "Icon: white Shakespeare logo on ${GREEN}${BG_COLOR}${NC} (Shakespeare purple)"
+echo -e "Icon: colorful Shakespeare logo on ${GREEN}${BG_COLOR}${NC} (Shakespeare purple)"
 echo -e "Generated:"
 echo -e "  Android:"
 echo -e "    - ic_launcher_foreground.png (adaptive, all densities)"
 echo -e "    - ic_launcher.png (legacy square, all densities)"
 echo -e "    - ic_launcher_round.png (legacy round, all densities)"
+echo -e "    - splash.png (portrait + landscape, all densities)"
 echo -e "  iOS:"
 echo -e "    - AppIcon-512@2x.png (1024x1024)"
