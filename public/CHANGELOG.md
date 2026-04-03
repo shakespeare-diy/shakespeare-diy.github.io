@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.10.3] - 2026-04-02
+
+### Fixed
+- Fix Android app showing default Capacitor splash screen and icon colors
+
 ## [9.10.2] - 2026-04-02
 
 ### Fixed
