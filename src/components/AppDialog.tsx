@@ -393,9 +393,11 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                     {formData.banner ? 'Change banner' : 'Add banner'}
                   </span>
                 </div>
-                <div className="absolute bottom-2 right-2 h-7 w-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center">
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                </div>
+                {formData.banner && (
+                  <div className="absolute bottom-2 right-2 h-7 w-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center">
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                )}
               </div>
 
               {/* Icon + Name/Description */}
