@@ -125,6 +125,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
 
   const [formData, setFormData] = useState<AppFormData>(emptyFormData(projectId));
   const [isSaving, setIsSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [newKind, setNewKind] = useState('');
   const [newHandlerUrl, setNewHandlerUrl] = useState('');
   const [newHandlerType, setNewHandlerType] = useState('');
@@ -244,48 +245,9 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
       return;
     }
 
-    if (!formData.name.trim()) {
-      toast({
-        title: 'Name required',
-        description: 'Please enter a name for your app.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    setSubmitted(true);
 
-    if (!formData.about.trim()) {
-      toast({
-        title: 'Description required',
-        description: 'Please enter a description for your app.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!formData.website.trim()) {
-      toast({
-        title: 'Website required',
-        description: 'Please enter a website URL for your app.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!formData.picture.trim()) {
-      toast({
-        title: 'Icon required',
-        description: 'Please upload an icon for your app.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!formData.banner.trim()) {
-      toast({
-        title: 'Banner required',
-        description: 'Please upload a banner image for your app.',
-        variant: 'destructive',
-      });
+    if (!formData.name.trim() || !formData.about.trim() || !formData.website.trim() || !formData.picture.trim() || !formData.banner.trim()) {
       return;
     }
 
@@ -413,7 +375,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
 
               {/* Banner */}
               <div
-                className="relative h-32 bg-muted cursor-pointer group"
+                className={`relative h-32 bg-muted cursor-pointer group${submitted && !formData.banner ? ' ring-2 ring-destructive ring-inset' : ''}`}
                 style={formData.banner ? { backgroundImage: `url(${formData.banner})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
                 onClick={() => !isSaving && !isUploading && bannerFileInputRef.current?.click()}
               >
@@ -440,7 +402,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
               <div className="px-4 pb-4">
                 {/* Icon overlapping banner */}
                 <div className="-mt-10 mb-3">
-                  <div className="relative inline-block group cursor-pointer" onClick={() => !isSaving && !isUploading && fileInputRef.current?.click()}>
+                  <div className={`relative inline-block group cursor-pointer${submitted && !formData.picture ? ' ring-2 ring-destructive rounded-2xl' : ''}`} onClick={() => !isSaving && !isUploading && fileInputRef.current?.click()}>
                     <Avatar className="h-20 w-20 rounded-2xl border-4 border-background shadow-sm">
                       <AvatarImage src={formData.picture} alt={formData.name || 'App icon'} className="object-cover" />
                       <AvatarFallback className="rounded-2xl bg-muted">
@@ -458,20 +420,31 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
 
                 {/* Name & Description */}
                 <div className="space-y-2">
-                  <Input
-                    value={formData.name}
-                    onChange={e => updateField('name', e.target.value)}
-                    placeholder="App Name"
-                    disabled={isSaving}
-                  />
-                  <Textarea
-                    value={formData.about}
-                    onChange={e => updateField('about', e.target.value)}
-                    placeholder="A short description of your app..."
-                    rows={2}
-                    disabled={isSaving}
-                    className="resize-none"
-                  />
+                  <div>
+                    <Input
+                      value={formData.name}
+                      onChange={e => updateField('name', e.target.value)}
+                      placeholder="App Name"
+                      disabled={isSaving}
+                      className={submitted && !formData.name.trim() ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    />
+                    {submitted && !formData.name.trim() && (
+                      <p className="text-xs text-destructive mt-1">Required</p>
+                    )}
+                  </div>
+                  <div>
+                    <Textarea
+                      value={formData.about}
+                      onChange={e => updateField('about', e.target.value)}
+                      placeholder="A short description of your app..."
+                      rows={2}
+                      disabled={isSaving}
+                      className={`resize-none${submitted && !formData.about.trim() ? ' border-destructive focus-visible:ring-destructive' : ''}`}
+                    />
+                    {submitted && !formData.about.trim() && (
+                      <p className="text-xs text-destructive mt-1">Required</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Website */}
@@ -482,8 +455,11 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                     onChange={e => updateField('website', e.target.value)}
                     placeholder={deployedUrl || 'https://myapp.example.com'}
                     disabled={isSaving}
-                    className="text-sm"
+                    className={`text-sm${submitted && !formData.website.trim() ? ' border-destructive focus-visible:ring-destructive' : ''}`}
                   />
+                  {submitted && !formData.website.trim() && (
+                    <p className="text-xs text-destructive mt-1">Required</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -635,14 +611,10 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
             {/* Save Button */}
             <Button
               onClick={handleSave}
-              disabled={isSaving || !formData.name.trim() || !formData.about.trim() || !formData.website.trim() || !formData.picture.trim() || !formData.banner.trim()}
+              disabled={isSaving}
               className="w-full gap-2"
             >
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
               {isSaving
                 ? (hasApp ? 'Updating...' : 'Publishing...')
                 : (hasApp ? 'Update App' : 'Publish App')}
