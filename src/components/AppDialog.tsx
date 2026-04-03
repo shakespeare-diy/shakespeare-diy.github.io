@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/useToast';
 import { useFS } from '@/hooks/useFS';
@@ -511,13 +512,24 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                         disabled={isSaving}
                         className="flex-1"
                       />
-                      <Input
+                      <Select
                         value={newHandlerType}
-                        onChange={e => setNewHandlerType(e.target.value)}
-                        placeholder="nevent"
+                        onValueChange={setNewHandlerType}
                         disabled={isSaving}
-                        className="w-24"
-                      />
+                      >
+                        <SelectTrigger className="w-28">
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="npub">npub</SelectItem>
+                          <SelectItem value="nsec">nsec</SelectItem>
+                          <SelectItem value="note">note</SelectItem>
+                          <SelectItem value="nprofile">nprofile</SelectItem>
+                          <SelectItem value="nevent">nevent</SelectItem>
+                          <SelectItem value="naddr">naddr</SelectItem>
+                          <SelectItem value="nrelay">nrelay</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button
                         variant="outline"
                         size="sm"
