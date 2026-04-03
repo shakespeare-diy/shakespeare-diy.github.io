@@ -401,14 +401,6 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
               />
             </div>
 
-            {/* Existing app coordinate info */}
-            {aTag && (
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p className="font-medium">Nostr Coordinate</p>
-                <code className="block p-2 bg-muted rounded text-xs break-all select-all">{aTag}</code>
-              </div>
-            )}
-
             {/* Advanced Section */}
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <CollapsibleTrigger asChild>
