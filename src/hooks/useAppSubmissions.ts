@@ -1,24 +1,8 @@
 import { useNostr } from '@nostrify/react';
 import { useQuery } from '@tanstack/react-query';
 import { nip19 } from 'nostr-tools';
-import type { NostrEvent } from '@nostrify/nostrify';
-
-// Kind 31733 for app submissions (addressable events)
-const APP_SUBMISSION_KIND = 31733;
-
-// The moderator npub and hex
-const MODERATOR_NPUB = 'npub1jvnpg4c6ljadf5t6ry0w9q0rnm4mksde87kglkrc993z46c39axsgq89sc';
-const MODERATOR_HEX = (() => {
-  try {
-    const decoded = nip19.decode(MODERATOR_NPUB);
-    return decoded.type === 'npub' ? decoded.data : '';
-  } catch {
-    return '';
-  }
-})();
-
-// Soapbox team follow pack naddr (same as used on About page)
-const SOAPBOX_TEAM_NADDR = 'naddr1qvzqqqyckypzpyexz3t34l966ngh5xg7u2q788hthdqmj0av3lv8s2tz9t43zt6dqqxxkdrsx4mnqm3jxfeh2ess5pyrw';
+import type { NostrEvent, NostrFilter, NRelay, NPool } from '@nostrify/nostrify';
+import { useAppContext } from '@/hooks/useAppContext';
 
 export interface AppSubmission extends NostrEvent {
   appName: string;
@@ -26,195 +10,158 @@ export interface AppSubmission extends NostrEvent {
   repositoryUrl: string;
   description: string;
   appIconUrl: string;
-  screenshotUrl: string;
-  appTags: string[];
-  authorNpub: string;
-  isFeatured: boolean;
-  isApproved: boolean;
-  isHidden: boolean;
-  isHomepage: boolean;
+}
+
+/**
+ * Extract pubkeys from the `p` tags of a Nostr event.
+ */
+function extractPubkeys(event: NostrEvent): string[] {
+  return event.tags
+    .filter(([name]) => name === 'p')
+    .map(([, pubkey]) => pubkey)
+    .filter(Boolean);
+}
+
+/**
+ * Resolve a NIP-19 identifier (note1, nevent1, or naddr1) to an event.
+ */
+async function resolveCuratorEvent(
+  curatorIdentifier: string,
+  nostr: NPool<NRelay>,
+): Promise<NostrEvent | null> {
+  try {
+    const decoded = nip19.decode(curatorIdentifier);
+
+    if (decoded.type === 'note') {
+      const events = await nostr.query(
+        [{ ids: [decoded.data], limit: 1 }],
+        { signal: AbortSignal.timeout(3000) },
+      );
+      return events[0] ?? null;
+    }
+
+    if (decoded.type === 'nevent') {
+      const filter: NostrFilter = { ids: [decoded.data.id], limit: 1 };
+      if (decoded.data.author) filter.authors = [decoded.data.author];
+      const events = await nostr.query([filter], { signal: AbortSignal.timeout(3000) });
+      return events[0] ?? null;
+    }
+
+    if (decoded.type === 'naddr') {
+      const { kind, pubkey, identifier } = decoded.data;
+      const events = await nostr.query(
+        [{ kinds: [kind], authors: [pubkey], '#d': [identifier], limit: 1 }],
+        { signal: AbortSignal.timeout(3000) },
+      );
+      return events[0] ?? null;
+    }
+  } catch {
+    // Invalid identifier or query failure — handled by caller
+  }
+
+  return null;
+}
+
+/**
+ * Returns true if a kind 31990 event can render an "Edit with Shakespeare" button.
+ * Requires an `a` tag referencing a kind 30617 git repository event.
+ */
+function hasGitRepository(event: NostrEvent): boolean {
+  return event.tags.some(([name, value]) => name === 'a' && value?.startsWith('30617:'));
+}
+
+/**
+ * Build a git clone URL from a kind 30617 `a` tag value (`30617:pubkey:d-tag`).
+ * Returns a nostr:// URI usable with isomorphic-git / Shakespeare clone flow.
+ */
+function repositoryUrlFromATag(aTagValue: string): string {
+  const parts = aTagValue.split(':');
+  if (parts.length < 3) return '';
+  const [, pubkey, identifier] = parts;
+  return `nostr://${pubkey}/${identifier}`;
 }
 
 export function useAppSubmissions() {
   const { nostr } = useNostr();
+  const { config } = useAppContext();
+  const curatorIdentifier = config.showcaseCurator;
 
   return useQuery({
-    queryKey: ['nostr', 'app-submissions'],
+    queryKey: ['nostr', 'app-submissions', curatorIdentifier],
     queryFn: async (): Promise<AppSubmission[]> => {
-      // Get Soapbox team follow pack for auto-approval
-      const teamPubkeys = new Set<string>();
-      try {
-        const decoded = nip19.decode(SOAPBOX_TEAM_NADDR);
-        if (decoded.type === 'naddr') {
-          const addrData = decoded.data;
-          const teamEvents = await nostr.query([{
-            kinds: [addrData.kind],
-            authors: [addrData.pubkey],
-            '#d': [addrData.identifier],
-            limit: 1
-          }], { signal: AbortSignal.timeout(1000) });
+      // No curator configured — nothing to show
+      if (!curatorIdentifier.trim()) return [];
 
-          if (teamEvents.length > 0) {
-            const teamEvent = teamEvents[0];
-            // Extract pubkeys from 'p' tags
-            teamEvent.tags
-              .filter(([name]) => name === 'p')
-              .forEach(([, pubkey]) => {
-                if (pubkey) teamPubkeys.add(pubkey);
-              });
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to fetch Soapbox team follow pack:', error);
-      }
+      // 1. Resolve the curator event to extract author pubkeys
+      const curatorEvent = await resolveCuratorEvent(curatorIdentifier, nostr);
+      if (!curatorEvent) return [];
 
-      // Get all app submissions (kind 31733)
-      const submissionEvents = await nostr.query([{
-        kinds: [APP_SUBMISSION_KIND],
-        '#t': ['soapbox-app-submission'],
-        limit: 100,
-      }], { signal: AbortSignal.timeout(3000) });
+      const authorPubkeys = extractPubkeys(curatorEvent);
+      if (authorPubkeys.length === 0) return [];
 
-      // Get list events from moderators (NIP-51 kind 30267)
-      const moderatorListEvents = await nostr.query([{
-        kinds: [30267],
-        authors: [MODERATOR_HEX],
-        '#d': [
-          'soapbox-featured-apps',
-          'soapbox-approved-apps',
-          'soapbox-homepage-apps',
-        ],
-        limit: 3,
-      }], { signal: AbortSignal.timeout(1000) });
+      // 2. Query kind 31990 events from those authors tagged with #t:shakespeare
+      const appEvents = await nostr.query(
+        [{
+          kinds: [31990],
+          authors: authorPubkeys,
+          '#t': ['shakespeare'],
+          limit: 200,
+        }],
+        { signal: AbortSignal.timeout(5000) },
+      );
 
-      // Get reporting events for hidden apps (NIP-56 kind 1984)
-      const reportEvents = await nostr.query([{
-        kinds: [1984],
-        authors: [MODERATOR_HEX],
-        limit: 1000
-      }], { signal: AbortSignal.timeout(1000) });
+      // 3. Client-side filter: only keep events that can render "Edit with Shakespeare"
+      const filteredEvents = appEvents.filter(hasGitRepository);
 
-      // Process submissions and apply moderation
-      const submissions: AppSubmission[] = [];
-      const submissionMap = new Map<string, NostrEvent>();
-
-      // Group regular submissions by d-tag (identifier) to get latest version
-      for (const event of submissionEvents) {
-        const dTag = event.tags.find(tag => tag[0] === 'd')?.[1];
-        if (!dTag) continue;
-
-        const existing = submissionMap.get(dTag);
+      // 4. Deduplicate: for each pubkey+d-tag, keep only the latest event
+      const latestMap = new Map<string, NostrEvent>();
+      for (const event of filteredEvents) {
+        const dTag = event.tags.find(([name]) => name === 'd')?.[1] ?? '';
+        const key = `${event.pubkey}:${dTag}`;
+        const existing = latestMap.get(key);
         if (!existing || event.created_at > existing.created_at) {
-          submissionMap.set(dTag, event);
+          latestMap.set(key, event);
         }
       }
 
-      // Get the latest featured list
-      const featuredList = moderatorListEvents.find(e => e.tags.find(tag => tag[0] === 'd' && tag[1] === 'soapbox-featured-apps'));
-      const approvedList = moderatorListEvents.find(e => e.tags.find(tag => tag[0] === 'd' && tag[1] === 'soapbox-approved-apps'));
-      const homepageList = moderatorListEvents.find(e => e.tags.find(tag => tag[0] === 'd' && tag[1] === 'soapbox-homepage-apps'));
-
-      // Extract featured app coordinates from the list
-      const featuredAppCoords = new Set<string>();
-      if (featuredList) {
-        featuredList.tags
-          .filter(tag => tag[0] === 'a')
-          .forEach(tag => featuredAppCoords.add(tag[1]));
-      }
-
-      // Extract approved app coordinates from the list
-      const approvedAppCoords = new Set<string>();
-      if (approvedList) {
-        approvedList.tags
-          .filter(tag => tag[0] === 'a')
-          .forEach(tag => approvedAppCoords.add(tag[1]));
-      }
-
-      // Extract homepage app coordinates from the list
-      const homepageAppCoords = new Set<string>();
-      if (homepageList) {
-        homepageList.tags
-          .filter(tag => tag[0] === 'a')
-          .forEach(tag => homepageAppCoords.add(tag[1]));
-      }
-
-      // Get hidden app coordinates from reports
-      const hiddenAppCoords = new Set<string>();
-      const appReports = new Map<string, { hidden: number; unhidden: number }>();
-
-      for (const report of reportEvents) {
-        // Look for app coordinate in 'a' tags
-        const aTag = report.tags.find(tag => tag[0] === 'a');
-        if (!aTag || !aTag[1]) continue;
-
-        const appCoord = aTag[1];
-        const reportType = aTag[2];
-
-        // Check if this is a moderation label
-        const moderationLabel = report.tags.find(tag =>
-          tag[0] === 'l' && tag[2] === 'soapbox.moderation'
-        )?.[1];
-
-        if (moderationLabel === 'hidden' && (reportType === 'spam' || reportType === 'other')) {
-          if (!appReports.has(appCoord)) {
-            appReports.set(appCoord, { hidden: 0, unhidden: 0 });
-          }
-          appReports.get(appCoord)!.hidden = Math.max(
-            appReports.get(appCoord)!.hidden,
-            report.created_at
-          );
-        } else if (moderationLabel === 'unhidden' && reportType === 'other') {
-          if (!appReports.has(appCoord)) {
-            appReports.set(appCoord, { hidden: 0, unhidden: 0 });
-          }
-          appReports.get(appCoord)!.unhidden = Math.max(
-            appReports.get(appCoord)!.unhidden,
-            report.created_at
-          );
-        }
-      }
-
-      // Determine which apps are currently hidden (latest action wins)
-      for (const [appCoord, reports] of appReports) {
-        if (reports.hidden > reports.unhidden) {
-          hiddenAppCoords.add(appCoord);
-        }
-      }
-
-      // Convert to AppSubmission objects
-      for (const [dTag, event] of submissionMap) {
+      // 5. Shape into AppSubmission objects
+      const submissions: AppSubmission[] = [];
+      for (const event of latestMap.values()) {
         try {
-          const appName = event.tags.find(tag => tag[0] === 'title')?.[1] || '';
-          const websiteUrl = event.tags.find(tag => tag[0] === 'website')?.[1] || '';
-          const repositoryUrl = event.tags.find(tag => tag[0] === 'repository')?.[1] || '';
-          const appIconUrl = event.tags.find(tag => tag[0] === 'icon')?.[1] || '';
-          const screenshotUrl = event.tags.find(tag => tag[0] === 'screenshot')?.[1] || '';
-          const authorNpub = event.tags.find(tag => tag[0] === 'author')?.[1] || event.pubkey;
-          const appTags = event.tags.filter(tag => tag[0] === 'app-tag').map(tag => tag[1]);
+          let appName = '';
+          let appIconUrl = '';
+          let websiteUrl = '';
+          let description = '';
 
-          // Check if app is featured, approved, homepage, or hidden
-          const appCoordinate = `${APP_SUBMISSION_KIND}:${event.pubkey}:${dTag}`;
-          const isFeatured = featuredAppCoords.has(appCoordinate);
-          const isHomepage = homepageAppCoords.has(appCoordinate);
-          const isSubmittedByModerator = event.pubkey === MODERATOR_HEX;
-          const isSubmittedByTeamMember = teamPubkeys.has(event.pubkey);
-          const isApproved = approvedAppCoords.has(appCoordinate) || isFeatured || isSubmittedByModerator || isSubmittedByTeamMember;
-          const isHidden = hiddenAppCoords.has(appCoordinate);
+          // Parse kind-0-style metadata from content
+          if (event.content) {
+            try {
+              const meta = JSON.parse(event.content) as Record<string, unknown>;
+              if (typeof meta.name === 'string') appName = meta.name;
+              if (typeof meta.about === 'string') description = meta.about;
+              if (typeof meta.picture === 'string') appIconUrl = meta.picture;
+              if (typeof meta.website === 'string') websiteUrl = meta.website;
+            } catch {
+              // Non-JSON content — ignore
+            }
+          }
+
+          // Fallback: title tag
+          if (!appName) {
+            appName = event.tags.find(([name]) => name === 'title')?.[1] ?? '';
+          }
+
+          // Build repository URL from the first 30617 `a` tag
+          const repoATag = event.tags.find(([name, value]) => name === 'a' && value?.startsWith('30617:'));
+          const repositoryUrl = repoATag ? repositoryUrlFromATag(repoATag[1]) : '';
 
           submissions.push({
             ...event,
             appName,
             websiteUrl,
             repositoryUrl,
-            description: event.content,
+            description,
             appIconUrl,
-            screenshotUrl,
-            appTags: appTags,
-            authorNpub,
-            isFeatured,
-            isApproved,
-            isHidden,
-            isHomepage
           });
         } catch (error) {
           console.warn('Failed to parse app submission:', error);
@@ -223,8 +170,8 @@ export function useAppSubmissions() {
 
       return submissions;
     },
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // 1 minute
+    staleTime: 30000,
+    refetchInterval: 60000,
   });
 }
 
@@ -235,6 +182,6 @@ export function useUserAppSubmissions(userPubkey?: string) {
 
   return {
     data: userSubmissions,
-    ...rest
+    ...rest,
   };
 }

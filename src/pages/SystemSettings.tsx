@@ -23,7 +23,7 @@ export function SystemSettings() {
   const [faviconUrlInput, setFaviconUrlInput] = useState(config.faviconUrl);
   const [ngitWebUrlInput, setNgitWebUrlInput] = useState(config.ngitWebUrl);
   const [previewDomainInput, setPreviewDomainInput] = useState(config.previewDomain);
-  const [showcaseModeratorInput, setShowcaseModeratorInput] = useState(config.showcaseModerator);
+  const [showcaseCuratorInput, setShowcaseCuratorInput] = useState(config.showcaseCurator);
   const [fsPathProjectsInput, setFsPathProjectsInput] = useState(config.fsPathProjects);
   const [fsPathConfigInput, setFsPathConfigInput] = useState(config.fsPathConfig);
   const [fsPathTmpInput, setFsPathTmpInput] = useState(config.fsPathTmp);
@@ -41,7 +41,7 @@ export function SystemSettings() {
     ngitWebUrl: config.ngitWebUrl !== defaultConfig.ngitWebUrl,
     previewDomain: config.previewDomain !== defaultConfig.previewDomain,
     showcaseEnabled: config.showcaseEnabled !== defaultConfig.showcaseEnabled,
-    showcaseModerator: config.showcaseModerator !== defaultConfig.showcaseModerator,
+    showcaseCurator: config.showcaseCurator !== defaultConfig.showcaseCurator,
     fsPathProjects: config.fsPathProjects !== defaultConfig.fsPathProjects,
     fsPathConfig: config.fsPathConfig !== defaultConfig.fsPathConfig,
     fsPathTmp: config.fsPathTmp !== defaultConfig.fsPathTmp,
@@ -105,11 +105,11 @@ export function SystemSettings() {
     });
   };
 
-  const restoreShowcaseModerator = () => {
-    const defaultValue = defaultConfig.showcaseModerator;
-    setShowcaseModeratorInput(defaultValue);
+  const restoreShowcaseCurator = () => {
+    const defaultValue = defaultConfig.showcaseCurator;
+    setShowcaseCuratorInput(defaultValue);
     updateConfig((current) => {
-      const { showcaseModerator, ...rest } = current;
+      const { showcaseCurator, ...rest } = current;
       return rest;
     });
   };
@@ -640,7 +640,7 @@ export function SystemSettings() {
             <div className="flex items-center gap-2">
               <Award className="h-4 w-4 text-muted-foreground" />
               <h4 className="text-sm font-medium">{t('showcase')}</h4>
-              {(isModified.showcaseEnabled || isModified.showcaseModerator) && (
+              {(isModified.showcaseEnabled || isModified.showcaseCurator) && (
                 <div className="h-2 w-2 rounded-full bg-yellow-500" title={t('modified')} />
               )}
             </div>
@@ -685,34 +685,34 @@ export function SystemSettings() {
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="showcase-moderator" className="text-sm font-medium">
-                    {t('showcaseModerator')}
+                  <Label htmlFor="showcase-curator" className="text-sm font-medium">
+                    {t('showcaseCurator')}
                   </Label>
-                  {isModified.showcaseModerator && (
+                  {isModified.showcaseCurator && (
                     <div className="h-2 w-2 rounded-full bg-yellow-500" title={t('modified')} />
                   )}
                 </div>
                 <div className="flex gap-2">
                   <Input
-                    id="showcase-moderator"
+                    id="showcase-curator"
                     type="text"
-                    placeholder="npub1..."
-                    value={showcaseModeratorInput}
+                    placeholder="note1... / nevent1... / naddr1..."
+                    value={showcaseCuratorInput}
                     onChange={(e) => {
                       const value = e.target.value;
-                      setShowcaseModeratorInput(value);
+                      setShowcaseCuratorInput(value);
                       updateConfig((current) => ({
                         ...current,
-                        showcaseModerator: value,
+                        showcaseCurator: value,
                       }));
                     }}
                     className="flex-1"
                   />
-                  {isModified.showcaseModerator && (
+                  {isModified.showcaseCurator && (
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={restoreShowcaseModerator}
+                      onClick={restoreShowcaseCurator}
                       title={t('restoreToDefault')}
                     >
                       <RotateCcw className="h-4 w-4" />
@@ -720,7 +720,7 @@ export function SystemSettings() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t('showcaseModeratorDescription')}
+                  {t('showcaseCuratorDescription')}
                 </p>
               </div>
             </div>

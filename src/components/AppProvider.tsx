@@ -51,7 +51,7 @@ const AppConfigSchema = z.object({
   previewDomain: z.string().min(1),
   language: z.string(),
   showcaseEnabled: z.boolean(),
-  showcaseModerator: z.string(),
+  showcaseCurator: z.string(),
   fsPathProjects: z.string().min(1),
   fsPathConfig: z.string().min(1),
   fsPathTmp: z.string().min(1),

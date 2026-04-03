@@ -50,7 +50,7 @@ export function TestApp({ children }: TestAppProps) {
     previewDomain: 'local-shakespeare.dev',
     language: 'en',
     showcaseEnabled: true,
-    showcaseModerator: 'npub1jvnpg4c6ljadf5t6ry0w9q0rnm4mksde87kglkrc993z46c39axsgq89sc',
+    showcaseCurator: '',
     graspMetadata: {
       relays: [
         { url: 'wss://git.shakespeare.diy/' },

@@ -50,8 +50,8 @@ export interface AppConfig {
   language?: string;
   /** Whether to show the showcase section */
   showcaseEnabled: boolean;
-  /** Npub of the showcase moderator */
-  showcaseModerator: string;
+  /** NIP-19 identifier (note1, nevent1, or naddr1) pointing at an event with p tags used as curator authors */
+  showcaseCurator: string;
   /** VFS path for projects directory */
   fsPathProjects: string;
   /** VFS path for config directory */

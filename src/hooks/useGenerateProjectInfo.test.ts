@@ -68,7 +68,7 @@ describe('useGenerateProjectInfo', () => {
       ngitWebUrl: 'https://nostrhub.io/{naddr}',
       previewDomain: 'local-shakespeare.dev',
       showcaseEnabled: true,
-      showcaseModerator: 'npub1jvnpg4c6ljadf5t6ry0w9q0rnm4mksde87kglkrc993z46c39axsgq89sc',
+      showcaseCurator: '',
       graspMetadata: {
         relays: [{ url: 'wss://git.shakespeare.diy/' }, { url: 'wss://relay.ngit.dev/' }],
         updatedAt: 0,
@@ -232,7 +232,7 @@ describe('useGenerateProjectInfo', () => {
       ngitWebUrl: 'https://nostrhub.io/{naddr}',
       previewDomain: 'local-shakespeare.dev',
       showcaseEnabled: true,
-      showcaseModerator: 'npub1jvnpg4c6ljadf5t6ry0w9q0rnm4mksde87kglkrc993z46c39axsgq89sc',
+      showcaseCurator: '',
       graspMetadata: {
         relays: [{ url: 'wss://git.shakespeare.diy/' }, { url: 'wss://relay.ngit.dev/' }],
         updatedAt: 0,

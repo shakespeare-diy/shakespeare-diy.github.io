@@ -1,92 +1,24 @@
-import React, { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import React from "react";
 import { useAppSubmissions } from "@/hooks/useAppSubmissions";
 import { AppShowcaseCard } from "@/components/AppShowcaseCard";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { nip19 } from 'nostr-tools';
-import { shuffleArray } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useTranslation } from 'react-i18next';
+import { Button } from "@/components/ui/button";
 import { Link } from 'react-router-dom';
 import { Settings } from 'lucide-react';
 
 export function AppShowcase() {
   const { t } = useTranslation();
-  const { user } = useCurrentUser();
   const { config } = useAppContext();
   const { data: submissions = [], isLoading } = useAppSubmissions();
-  const [showAllApps, setShowAllApps] = useState(false);
-
-  // Get moderator hex from config
-  const MODERATOR_HEX = useMemo(() => {
-    try {
-      const decoded = nip19.decode(config.showcaseModerator);
-      return decoded.type === 'npub' ? decoded.data : '';
-    } catch {
-      return '';
-    }
-  }, [config.showcaseModerator]);
-  const isModerator = user?.pubkey === MODERATOR_HEX;
-
-  // Categorize and organize submissions - single pass for efficiency
-  const { 
-    displayedFeaturedApps, 
-    displayedTemplateApps, 
-    moreApps 
-  } = useMemo(() => {
-    const DISPLAY_LIMIT = 6;
-    
-    // Single pass categorization
-    const templates: typeof submissions = [];
-    const featured: typeof submissions = [];
-    const approved: typeof submissions = [];
-    
-    for (const app of submissions) {
-      if (app.isHidden) continue;
-      
-      const isTemplate = app.appTags.includes('Template');
-      const isFeatured = app.isFeatured;
-      const isApproved = app.isApproved;
-      
-      if (isTemplate) {
-        templates.push(app);
-      } else if (isFeatured) {
-        featured.push(app);
-      } else if (isApproved) {
-        approved.push(app);
-      }
-    }
-    
-    // Shuffle each category once
-    const shuffledTemplates = shuffleArray(templates);
-    const shuffledFeatured = shuffleArray(featured);
-    const shuffledApproved = shuffleArray(approved);
-    
-    // Split into display and more sections
-    return {
-      displayedFeaturedApps: shuffledFeatured.slice(0, DISPLAY_LIMIT),
-      displayedTemplateApps: shuffledTemplates.slice(0, DISPLAY_LIMIT),
-      moreApps: [
-        ...shuffledFeatured.slice(DISPLAY_LIMIT),
-        ...shuffledTemplates.slice(DISPLAY_LIMIT),
-        ...shuffledApproved,
-      ],
-    };
-  }, [submissions]);
 
   // Don't show showcase if disabled in settings
   if (!config.showcaseEnabled) {
     return null;
   }
 
-  // Don't show showcase if no apps exist
   if (isLoading) {
     return (
       <div className="mt-16 max-w-7xl mx-auto">
@@ -106,13 +38,8 @@ export function AppShowcase() {
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-4 w-4/5" />
                 </div>
-                <div className="flex gap-1 mb-4">
-                  <Skeleton className="h-5 w-16" />
-                  <Skeleton className="h-5 w-20" />
-                </div>
                 <div className="mt-auto flex gap-2">
                   <Skeleton className="h-6 flex-1" />
-                  <Skeleton className="h-8 w-8" />
                   <Skeleton className="h-8 w-8" />
                 </div>
               </CardContent>
@@ -147,94 +74,10 @@ export function AppShowcase() {
 
   return (
     <div className="mt-16 max-w-7xl mx-auto">
-      {/* Apps Grid */}
-      <div className="space-y-12">
-        {/* Featured Apps */}
-        {displayedFeaturedApps.length > 0 && (
-          <div>
-            <div className="flex items-start gap-3 mb-6">
-              <div className="flex-none w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                <span className="text-sm">⭐</span>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-foreground">{t('featuredApps')}</h3>
-                <p className="text-sm text-muted-foreground">{t('featuredAppsDescription')}</p>
-              </div>
-            </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayedFeaturedApps.map((app) => (
-                <AppShowcaseCard
-                  key={app.id}
-                  app={app}
-                  showModerationControls={isModerator}
-                  hideApprovalStatus={true}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Templates Section */}
-        {displayedTemplateApps.length > 0 && (
-          <div>
-            <div className="flex items-start gap-3 mb-6">
-              <div className="flex-none w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <span className="text-sm">📋</span>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-foreground">{t('templates')}</h3>
-                <p className="text-sm text-muted-foreground">{t('templatesDescription')}</p>
-              </div>
-            </div>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayedTemplateApps.map((app) => (
-                <AppShowcaseCard
-                  key={app.id}
-                  app={app}
-                  showModerationControls={isModerator}
-                  hideApprovalStatus={true}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* More Apps (Remaining Featured, Templates, and Approved) - Collapsible */}
-        {moreApps.length > 0 && (
-          <div>
-            <Collapsible open={showAllApps} onOpenChange={setShowAllApps}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="p-0 h-auto mb-6 hover:bg-transparent">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-none w-8 h-8 bg-blue-100 dark:bg-blue-900/50 rounded-lg flex items-center justify-center">
-                      <span className="text-sm">📱</span>
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-xl font-bold text-foreground">
-                        {t('moreAppsCount', { count: moreApps.length })}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {showAllApps ? t('clickToCollapse') : t('clickToViewMore')}
-                      </p>
-                    </div>
-                  </div>
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {moreApps.map((app) => (
-                    <AppShowcaseCard
-                      key={app.id}
-                      app={app}
-                      showModerationControls={isModerator}
-                      hideApprovalStatus={true}
-                    />
-                  ))}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-        )}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {submissions.map((app) => (
+          <AppShowcaseCard key={app.id} app={app} />
+        ))}
       </div>
     </div>
   );
