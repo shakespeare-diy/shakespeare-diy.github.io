@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.10.4] - 2026-04-02
+
+### Fixed
+- Fix Android splash screen showing logo masked to white silhouette instead of full color
+
 ## [9.10.3] - 2026-04-02
 
 ### Fixed
