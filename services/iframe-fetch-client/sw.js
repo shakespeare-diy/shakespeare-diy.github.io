@@ -138,18 +138,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Let iframe client system files be handled normally
-  if (url.pathname.startsWith("/_") || url.pathname === "/sw.js") {
-    return;
-  }
-
-  // Let root path be handled normally (loads the iframe client page)
-  if (url.pathname === "/") {
-    return;
-  }
-
-  // Let iframe client assets be handled normally (anything in _iframe-client directory and common assets)
+  // Let iframe client system files and common assets be handled normally
   if (url.pathname.startsWith("/_iframe-client/") ||
+      url.pathname === "/sw.js" ||
+      url.pathname === "/" ||
       url.pathname === "/favicon.ico" ||
       url.pathname === "/manifest.webmanifest") {
     return;
