@@ -437,19 +437,19 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                     className="resize-none"
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Website */}
-            <div className="space-y-1.5">
-              <Label htmlFor="app-website" className="text-xs text-muted-foreground">Website</Label>
-              <Input
-                id="app-website"
-                value={formData.website}
-                onChange={e => updateField('website', e.target.value)}
-                placeholder={deployedUrl || 'https://myapp.example.com'}
-                disabled={isSaving}
-              />
+                {/* Website */}
+                <div className="mt-3 pt-3 border-t">
+                  <Input
+                    id="app-website"
+                    value={formData.website}
+                    onChange={e => updateField('website', e.target.value)}
+                    placeholder={deployedUrl || 'https://myapp.example.com'}
+                    disabled={isSaving}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Advanced Section */}
