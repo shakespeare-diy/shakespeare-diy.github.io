@@ -253,6 +253,42 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
       return;
     }
 
+    if (!formData.about.trim()) {
+      toast({
+        title: 'Description required',
+        description: 'Please enter a description for your app.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!formData.website.trim()) {
+      toast({
+        title: 'Website required',
+        description: 'Please enter a website URL for your app.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!formData.picture.trim()) {
+      toast({
+        title: 'Icon required',
+        description: 'Please upload an icon for your app.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!formData.banner.trim()) {
+      toast({
+        title: 'Banner required',
+        description: 'Please upload a banner image for your app.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!formData.dTag.trim()) {
       toast({
         title: 'Identifier required',
@@ -439,7 +475,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                 </div>
 
                 {/* Website */}
-                <div className="mt-3 pt-3 border-t">
+                <div className="mt-3">
                   <Input
                     id="app-website"
                     value={formData.website}
@@ -599,7 +635,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
             {/* Save Button */}
             <Button
               onClick={handleSave}
-              disabled={isSaving || !formData.name.trim()}
+              disabled={isSaving || !formData.name.trim() || !formData.about.trim() || !formData.website.trim() || !formData.picture.trim() || !formData.banner.trim()}
               className="w-full gap-2"
             >
               {isSaving ? (
