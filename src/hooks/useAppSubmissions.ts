@@ -10,6 +10,7 @@ export interface AppSubmission extends NostrEvent {
   repositoryUrl: string;
   description: string;
   appIconUrl: string;
+  bannerUrl: string;
 }
 
 /**
@@ -110,8 +111,17 @@ export function useAppSubmissions() {
         { signal: AbortSignal.timeout(5000) },
       );
 
-      // 3. Client-side filter: only keep events that can render "Edit with Shakespeare"
-      const filteredEvents = appEvents.filter(hasGitRepository);
+      // 3. Client-side filter: only keep events with a git repo, icon, and banner
+      const filteredEvents = appEvents.filter(event => {
+        if (!hasGitRepository(event)) return false;
+        try {
+          const meta = JSON.parse(event.content) as Record<string, unknown>;
+          return typeof meta.picture === 'string' && meta.picture &&
+                 typeof meta.banner === 'string' && meta.banner;
+        } catch {
+          return false;
+        }
+      });
 
       // 4. Deduplicate: for each pubkey+d-tag, keep only the latest event
       const latestMap = new Map<string, NostrEvent>();
@@ -130,6 +140,7 @@ export function useAppSubmissions() {
         try {
           let appName = '';
           let appIconUrl = '';
+          let bannerUrl = '';
           let websiteUrl = '';
           let description = '';
 
@@ -140,6 +151,7 @@ export function useAppSubmissions() {
               if (typeof meta.name === 'string') appName = meta.name;
               if (typeof meta.about === 'string') description = meta.about;
               if (typeof meta.picture === 'string') appIconUrl = meta.picture;
+              if (typeof meta.banner === 'string') bannerUrl = meta.banner;
               if (typeof meta.website === 'string') websiteUrl = meta.website;
             } catch {
               // Non-JSON content — ignore
@@ -162,6 +174,7 @@ export function useAppSubmissions() {
             repositoryUrl,
             description,
             appIconUrl,
+            bannerUrl,
           });
         } catch (error) {
           console.warn('Failed to parse app submission:', error);

@@ -12,70 +12,71 @@ interface AppShowcaseCardProps {
 }
 
 export function AppShowcaseCard({ app }: AppShowcaseCardProps) {
-  const [imageError, setImageError] = useState(false);
+  const [bannerError, setBannerError] = useState(false);
+  const [iconError, setIconError] = useState(false);
 
   const { data: authorData } = useAuthor(app.pubkey);
-
   const authorNpub = nip19.npubEncode(app.pubkey);
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 hover:border-primary/20 h-full flex flex-col">
-      {/* App Icon / Header */}
-      <div className="relative">
-        <a
-          href={app.websiteUrl || undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block aspect-video bg-gradient-to-br from-muted/50 to-muted rounded-t-lg overflow-hidden cursor-pointer"
-        >
-          {app.appIconUrl && !imageError ? (
+    <Card className="group hover:shadow-lg transition-all duration-300 hover:border-primary/20 h-full flex flex-col overflow-hidden">
+      {/* Banner + overlapping icon */}
+      <a
+        href={app.websiteUrl || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block relative"
+      >
+        {/* Banner */}
+        <div className="aspect-[3/1] bg-muted overflow-hidden">
+          {app.bannerUrl && !bannerError ? (
             <img
-              src={app.appIconUrl}
-              alt={`${app.appName} icon`}
+              src={app.bannerUrl}
+              alt=""
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              onError={() => setImageError(true)}
+              onError={() => setBannerError(true)}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-2 bg-muted rounded-lg flex items-center justify-center">
-                  <ExternalLink className="w-8 h-8" />
-                </div>
-                <p className="text-sm">No preview</p>
-              </div>
-            </div>
+            <div className="w-full h-full bg-gradient-to-br from-accent/10 via-transparent to-primary/5" />
           )}
-        </a>
-      </div>
-
-      <CardContent className="p-6 flex flex-col flex-1">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div>
-              <h3 className="text-xl font-semibold text-foreground mb-1" title={app.appName}>
-                {app.appName.length > 50 ? `${app.appName.slice(0, 50)}...` : app.appName}
-              </h3>
-            </div>
-          </div>
         </div>
 
+        {/* Icon overlapping banner */}
+        <div className="absolute bottom-0 translate-y-1/2 left-4">
+          <div className="h-14 w-14 rounded-xl border-2 border-background shadow-md overflow-hidden bg-muted flex-shrink-0">
+            {app.appIconUrl && !iconError ? (
+              <img
+                src={app.appIconUrl}
+                alt={`${app.appName} icon`}
+                className="w-full h-full object-cover"
+                onError={() => setIconError(true)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ExternalLink className="w-5 h-5 text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        </div>
+      </a>
+
+      <CardContent className="pt-10 px-4 pb-4 flex flex-col flex-1">
+        <h3 className="text-base font-semibold text-foreground mb-1 truncate" title={app.appName}>
+          {app.appName}
+        </h3>
+
         {app.description && (
-          <p className="text-muted-foreground mb-3 line-clamp-3">{app.description}</p>
+          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{app.description}</p>
         )}
 
-        {/* Author Information */}
+        {/* Author */}
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-6 h-6 rounded-full overflow-hidden bg-muted flex-shrink-0">
+          <div className="w-5 h-5 rounded-full overflow-hidden bg-muted flex-shrink-0">
             {authorData?.metadata?.picture ? (
               <img
                 src={authorData.metadata.picture}
-                alt={`${authorData.metadata.name || 'Author'} avatar`}
+                alt={authorData.metadata.name || 'Author'}
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  target.parentElement!.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg></div>';
-                }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -83,7 +84,7 @@ export function AppShowcaseCard({ app }: AppShowcaseCardProps) {
               </div>
             )}
           </div>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             by{' '}
             <a
               href={`https://ditto.pub/${authorNpub}`}
@@ -96,31 +97,18 @@ export function AppShowcaseCard({ app }: AppShowcaseCardProps) {
           </span>
         </div>
 
-        {/* Spacer to push action links to bottom */}
-        <div className="flex-1"></div>
+        <div className="flex-1" />
 
         {/* Action Links */}
         <div className="flex items-center gap-2 mt-auto">
           {app.repositoryUrl && (
-            <Link
-              to={`/clone?url=${encodeURIComponent(app.repositoryUrl)}`}
-              className="flex-1"
-            >
-              <img
-                src="/badge.svg"
-                alt="Edit with Shakespeare"
-                className="h-6 hover:opacity-80 transition-opacity"
-              />
+            <Link to={`/clone?url=${encodeURIComponent(app.repositoryUrl)}`} className="flex-1">
+              <img src="/badge.svg" alt="Edit with Shakespeare" className="h-6 hover:opacity-80 transition-opacity" />
             </Link>
           )}
           {app.websiteUrl && (
             <Button variant="outline" size="sm" asChild>
-              <a
-                href={app.websiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Visit app"
-              >
+              <a href={app.websiteUrl} target="_blank" rel="noopener noreferrer" title="Visit app">
                 <ExternalLink className="w-4 h-4" />
               </a>
             </Button>
