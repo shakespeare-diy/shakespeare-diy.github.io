@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/useToast';
 import { useFS } from '@/hooks/useFS';
@@ -648,211 +649,182 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="space-y-4 pt-2">
+                <div className="space-y-3 pt-2">
                   {/* Hint to use AI */}
                   <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
                     <CircleHelp className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                     <span>Not sure? Ask Shakespeare to update your app.</span>
                   </div>
 
-                  {/* Identifier (d-tag) */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="app-dtag" className="text-xs">Identifier</Label>
-                    <Input
-                      id="app-dtag"
-                      value={formData.dTag}
-                      onChange={e => updateField('dTag', e.target.value)}
-                      placeholder="my-app"
-                      disabled={isSaving || hasApp}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {hasApp ? 'Cannot be changed after publishing.' : 'Unique identifier for this app. Defaults to the project ID.'}
-                    </p>
-                  </div>
+                  <Tabs defaultValue="general">
+                    <TabsList className="w-full">
+                      <TabsTrigger value="general" className="flex-1">General</TabsTrigger>
+                      <TabsTrigger value="handlers" className="flex-1">Handlers</TabsTrigger>
+                      <TabsTrigger value="tags" className="flex-1">Tags</TabsTrigger>
+                    </TabsList>
 
-                  {/* ngit Repository */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="app-ngit" className="text-xs">Git Repository</Label>
-                    <Input
-                      id="app-ngit"
-                      value={formData.ngitRepo}
-                      onChange={e => updateField('ngitRepo', e.target.value)}
-                      placeholder="naddr1..."
-                      disabled={isSaving}
-                      className={formData.ngitRepo && !naddrToATag(formData.ngitRepo) ? 'border-destructive focus-visible:ring-destructive' : ''}
-                    />
-                    {formData.ngitRepo && !naddrToATag(formData.ngitRepo) && (
-                      <p className="text-xs text-destructive">Invalid naddr</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">naddr of the ngit repository (kind 30617). Auto-detected from git remote if left blank.</p>
-                  </div>
-
-                  {/* nsite Deployment */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="app-nsite" className="text-xs">nsite Deployment</Label>
-                    <Input
-                      id="app-nsite"
-                      value={formData.nsiteDeployment}
-                      onChange={e => updateField('nsiteDeployment', e.target.value)}
-                      placeholder="naddr1..."
-                      disabled={isSaving}
-                      className={formData.nsiteDeployment && !naddrToATag(formData.nsiteDeployment) ? 'border-destructive focus-visible:ring-destructive' : ''}
-                    />
-                    {formData.nsiteDeployment && !naddrToATag(formData.nsiteDeployment) && (
-                      <p className="text-xs text-destructive">Invalid naddr</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">naddr of the nsite deployment (kind 35128). Auto-detected from .nsite/config.json if left blank.</p>
-                  </div>
-
-                  {/* Tags */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Tags</Label>
-                    {formData.tTags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {formData.tTags.map(tag => (
-                          <Badge key={tag} variant="secondary" className="gap-1">
-                            {tag}
-                            <button
-                              onClick={() => removeTag(tag)}
-                              disabled={isSaving}
-                              className="hover:text-destructive"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <Input
-                        value={newTag}
-                        onChange={e => setNewTag(e.target.value)}
-                        placeholder="e.g. productivity"
-                        disabled={isSaving}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') { e.preventDefault(); addTag(); }
-                        }}
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={addTag}
-                        disabled={isSaving || !newTag.trim()}
-                        className="h-9"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Supported Kinds */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Supported Event Kinds</Label>
-                    {formData.supportedKinds.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {formData.supportedKinds.map(kind => (
-                          <Badge key={kind} variant="secondary" className="gap-1">
-                            {kind}
-                            <button
-                              onClick={() => removeKind(kind)}
-                              disabled={isSaving}
-                              className="hover:text-destructive"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <Input
-                        value={newKind}
-                        onChange={e => setNewKind(e.target.value)}
-                        placeholder="Kind number (e.g. 1)"
-                        disabled={isSaving}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            addKind();
-                          }
-                        }}
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={addKind}
-                        disabled={isSaving || !newKind.trim()}
-                        className="h-9"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Web Handlers */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Web Handlers</Label>
-                    {formData.webHandlers.length > 0 && (
+                    {/* General tab: Identifier, Git Repo, nsite */}
+                    <TabsContent value="general" className="space-y-4 mt-3">
                       <div className="space-y-1.5">
-                        {formData.webHandlers.map((handler, index) => (
-                          <div key={index} className="flex items-center gap-2 text-sm bg-muted/50 p-2 rounded-md">
-                            <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                            <span className="truncate flex-1">{handler.url}</span>
-                            {handler.type && (
-                              <Badge variant="outline" className="text-xs flex-shrink-0">{handler.type}</Badge>
-                            )}
-                            <button
-                              onClick={() => removeHandler(index)}
-                              disabled={isSaving}
-                              className="hover:text-destructive flex-shrink-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
+                        <Label htmlFor="app-dtag" className="text-xs">Identifier</Label>
+                        <Input
+                          id="app-dtag"
+                          value={formData.dTag}
+                          onChange={e => updateField('dTag', e.target.value)}
+                          placeholder="my-app"
+                          disabled={isSaving || hasApp}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {hasApp ? 'Cannot be changed after publishing.' : 'Unique identifier for this app. Defaults to the project ID.'}
+                        </p>
                       </div>
-                    )}
-                    <div className="flex gap-2">
-                      <Input
-                        value={newHandlerUrl}
-                        onChange={e => setNewHandlerUrl(e.target.value)}
-                        placeholder="https://app.example.com/e/<bech32>"
-                        disabled={isSaving}
-                        className="flex-1"
-                      />
-                      <Select
-                        value={newHandlerType || '_all_'}
-                        onValueChange={v => setNewHandlerType(v === '_all_' ? '' : v)}
-                        disabled={isSaving}
-                      >
-                        <SelectTrigger className="w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_all_">All</SelectItem>
-                          <SelectItem value="npub">npub</SelectItem>
-                          <SelectItem value="note">note</SelectItem>
-                          <SelectItem value="nprofile">nprofile</SelectItem>
-                          <SelectItem value="nevent">nevent</SelectItem>
-                          <SelectItem value="naddr">naddr</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={addHandler}
-                        disabled={isSaving || !newHandlerUrl.trim()}
-                        className="h-9"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      URL patterns where <code className="text-xs">{'<bech32>'}</code> will be replaced with the NIP-19 entity.
-                    </p>
-                  </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="app-ngit" className="text-xs">Git Repository</Label>
+                        <Input
+                          id="app-ngit"
+                          value={formData.ngitRepo}
+                          onChange={e => updateField('ngitRepo', e.target.value)}
+                          placeholder="naddr1..."
+                          disabled={isSaving}
+                          className={formData.ngitRepo && !naddrToATag(formData.ngitRepo) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                        />
+                        {formData.ngitRepo && !naddrToATag(formData.ngitRepo) && (
+                          <p className="text-xs text-destructive">Invalid naddr</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">naddr of the ngit repository (kind 30617). Auto-detected from git remote if left blank.</p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="app-nsite" className="text-xs">nsite Deployment</Label>
+                        <Input
+                          id="app-nsite"
+                          value={formData.nsiteDeployment}
+                          onChange={e => updateField('nsiteDeployment', e.target.value)}
+                          placeholder="naddr1..."
+                          disabled={isSaving}
+                          className={formData.nsiteDeployment && !naddrToATag(formData.nsiteDeployment) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                        />
+                        {formData.nsiteDeployment && !naddrToATag(formData.nsiteDeployment) && (
+                          <p className="text-xs text-destructive">Invalid naddr</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">naddr of the nsite deployment (kind 35128). Auto-detected from .nsite/config.json if left blank.</p>
+                      </div>
+                    </TabsContent>
+
+                    {/* Handlers tab: Supported Kinds, Web Handlers */}
+                    <TabsContent value="handlers" className="space-y-4 mt-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Supported Event Kinds</Label>
+                        {formData.supportedKinds.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {formData.supportedKinds.map(kind => (
+                              <Badge key={kind} variant="secondary" className="gap-1">
+                                {kind}
+                                <button onClick={() => removeKind(kind)} disabled={isSaving} className="hover:text-destructive">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Input
+                            value={newKind}
+                            onChange={e => setNewKind(e.target.value)}
+                            placeholder="Kind number (e.g. 1)"
+                            disabled={isSaving}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKind(); } }}
+                            className="flex-1"
+                          />
+                          <Button variant="outline" size="sm" onClick={addKind} disabled={isSaving || !newKind.trim()} className="h-9">
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Web Handlers</Label>
+                        {formData.webHandlers.length > 0 && (
+                          <div className="space-y-1.5">
+                            {formData.webHandlers.map((handler, index) => (
+                              <div key={index} className="flex items-center gap-2 text-sm bg-muted/50 p-2 rounded-md">
+                                <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <span className="truncate flex-1">{handler.url}</span>
+                                {handler.type && (
+                                  <Badge variant="outline" className="text-xs flex-shrink-0">{handler.type}</Badge>
+                                )}
+                                <button onClick={() => removeHandler(index)} disabled={isSaving} className="hover:text-destructive flex-shrink-0">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Input
+                            value={newHandlerUrl}
+                            onChange={e => setNewHandlerUrl(e.target.value)}
+                            placeholder="https://app.example.com/e/<bech32>"
+                            disabled={isSaving}
+                            className="flex-1"
+                          />
+                          <Select value={newHandlerType || '_all_'} onValueChange={v => setNewHandlerType(v === '_all_' ? '' : v)} disabled={isSaving}>
+                            <SelectTrigger className="w-28">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_all_">All</SelectItem>
+                              <SelectItem value="npub">npub</SelectItem>
+                              <SelectItem value="note">note</SelectItem>
+                              <SelectItem value="nprofile">nprofile</SelectItem>
+                              <SelectItem value="nevent">nevent</SelectItem>
+                              <SelectItem value="naddr">naddr</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button variant="outline" size="sm" onClick={addHandler} disabled={isSaving || !newHandlerUrl.trim()} className="h-9">
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          URL patterns where <code className="text-xs">{'<bech32>'}</code> will be replaced with the NIP-19 entity.
+                        </p>
+                      </div>
+                    </TabsContent>
+
+                    {/* Tags tab */}
+                    <TabsContent value="tags" className="space-y-4 mt-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Tags</Label>
+                        {formData.tTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {formData.tTags.map(tag => (
+                              <Badge key={tag} variant="secondary" className="gap-1">
+                                {tag}
+                                <button onClick={() => removeTag(tag)} disabled={isSaving} className="hover:text-destructive">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Input
+                            value={newTag}
+                            onChange={e => setNewTag(e.target.value)}
+                            placeholder="e.g. productivity"
+                            disabled={isSaving}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+                            className="flex-1"
+                          />
+                          <Button variant="outline" size="sm" onClick={addTag} disabled={isSaving || !newTag.trim()} className="h-9">
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+
                   {/* Delete App */}
                   {hasApp && (
                     <div className="pt-2 border-t">
@@ -860,23 +832,11 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                         <div className="space-y-2">
                           <p className="text-xs text-muted-foreground">Are you sure? This will publish a deletion event to Nostr.</p>
                           <div className="flex gap-2">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="flex-1"
-                              onClick={handleDelete}
-                              disabled={isSaving}
-                            >
+                            <Button variant="destructive" size="sm" className="flex-1" onClick={handleDelete} disabled={isSaving}>
                               {isSaving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
                               Yes, delete
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                              onClick={() => setConfirmDelete(false)}
-                              disabled={isSaving}
-                            >
+                            <Button variant="outline" size="sm" className="flex-1" onClick={() => setConfirmDelete(false)} disabled={isSaving}>
                               Cancel
                             </Button>
                           </div>
