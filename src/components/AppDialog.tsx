@@ -51,6 +51,7 @@ interface AppFormData {
   banner: string;
   website: string;
   dTag: string;
+  tTags: string[];
   supportedKinds: string[];
   webHandlers: Array<{ url: string; type: string }>;
 }
@@ -76,6 +77,11 @@ function eventToFormData(event: NostrEvent): AppFormData {
     .filter(([t]) => t === 'web')
     .map(([, url, type]) => ({ url: url ?? '', type: type ?? '' }));
 
+  const tTags = event.tags
+    .filter(([t]) => t === 't')
+    .map(([, v]) => v)
+    .filter(Boolean);
+
   return {
     name: metadata.name ?? '',
     about: metadata.about ?? '',
@@ -83,6 +89,7 @@ function eventToFormData(event: NostrEvent): AppFormData {
     banner: metadata.banner ?? '',
     website: metadata.website ?? '',
     dTag,
+    tTags,
     supportedKinds,
     webHandlers,
   };
@@ -105,6 +112,7 @@ function emptyFormData(projectId: string): AppFormData {
     banner: '',
     website: '',
     dTag: projectId,
+    tTags: [],
     supportedKinds: [],
     webHandlers: [],
   };
@@ -205,6 +213,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [newTag, setNewTag] = useState('');
   const [newKind, setNewKind] = useState('');
   const [newHandlerUrl, setNewHandlerUrl] = useState('');
   const [newHandlerType, setNewHandlerType] = useState('');
@@ -253,6 +262,18 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const updateField = useCallback(<K extends keyof AppFormData>(key: K, value: AppFormData[K]) => {
     setFormData(prev => ({ ...prev, [key]: value }));
   }, []);
+
+  const addTag = useCallback(() => {
+    const tag = newTag.trim().toLowerCase();
+    if (tag && !formData.tTags.includes(tag)) {
+      updateField('tTags', [...formData.tTags, tag]);
+      setNewTag('');
+    }
+  }, [newTag, formData.tTags, updateField]);
+
+  const removeTag = useCallback((tag: string) => {
+    updateField('tTags', formData.tTags.filter(t => t !== tag));
+  }, [formData.tTags, updateField]);
 
   const addKind = useCallback(() => {
     const kind = newKind.trim();
@@ -365,6 +386,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
           banner: formData.banner,
           website: formData.website,
           dTag: formData.dTag,
+          tTags: formData.tTags,
           supportedKinds: formData.supportedKinds,
           webHandlers: formData.webHandlers,
         },
@@ -609,6 +631,48 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                     <p className="text-xs text-muted-foreground">
                       {hasApp ? 'Cannot be changed after publishing.' : 'Unique identifier for this app. Defaults to the project ID.'}
                     </p>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Tags</Label>
+                    {formData.tTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {formData.tTags.map(tag => (
+                          <Badge key={tag} variant="secondary" className="gap-1">
+                            {tag}
+                            <button
+                              onClick={() => removeTag(tag)}
+                              disabled={isSaving}
+                              className="hover:text-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Input
+                        value={newTag}
+                        onChange={e => setNewTag(e.target.value)}
+                        placeholder="e.g. productivity"
+                        disabled={isSaving}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); addTag(); }
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addTag}
+                        disabled={isSaving || !newTag.trim()}
+                        className="h-9"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Supported Kinds */}

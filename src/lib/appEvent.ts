@@ -12,6 +12,7 @@ export interface AppEventInput {
   banner?: string;
   website?: string;
   dTag: string;
+  tTags?: string[];
   supportedKinds?: string[];
   webHandlers?: Array<{ url: string; type?: string }>;
 }
@@ -67,6 +68,13 @@ export async function buildAppEvent(
         }
         tags.push(webTag);
       }
+    }
+  }
+
+  // Add user-defined t-tags
+  if (input.tTags) {
+    for (const tag of input.tTags) {
+      if (tag.trim()) tags.push(['t', tag.trim()]);
     }
   }
 
