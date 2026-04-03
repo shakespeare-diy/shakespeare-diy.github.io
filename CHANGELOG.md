@@ -1,5 +1,24 @@
 # Changelog
 
+## [9.11.0] - 2026-04-03
+
+### Added
+- Upload a banner image for your app directly from the App dialog
+- T-tag editor in the App dialog Advanced section for tagging your app by category
+- Delete App button in the App dialog Advanced section when editing an existing app
+- Ngit repo and nsite deployment address fields in the App dialog Advanced section
+- Auto-fill app name, description, and images from your project's OG tags and web manifest on first publish
+
+### Changed
+- Redesigned App dialog with an overlapping banner and avatar card layout
+- Reorganized App dialog Advanced section into General, Handlers, and Tags tabs
+- Showcase cards now show banner and icon images, and require both to appear in the showcase
+- Validation summary above the Save button replaces per-field "Required" labels
+- Updated showcase curator to the Shakespeare Builders community list
+
+### Fixed
+- Upgrade Nostrify to fix bunker connection issues
+
 ## [9.10.4] - 2026-04-02
 
 ### Fixed

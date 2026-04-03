@@ -29,7 +29,6 @@ import { DotAI } from '@/lib/DotAI';
 import { buildAppEvent } from '@/lib/appEvent';
 import {
   Loader2,
-  Save,
   Plus,
   X,
   ExternalLink,
@@ -242,7 +241,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const { mutateAsync: uploadFile, isPending: isUploading } = useUploadFile();
   const cwd = `${projectsPath}/${projectId}`;
 
-  const { event, isLoading, aTag, hasApp, refetch } = useAppEvent({ cwd });
+  const { event, isLoading, hasApp, refetch } = useAppEvent({ cwd });
   const { settings: deploySettings, isLoading: isDeployLoading } = useProjectDeploySettings(projectId);
 
   const [formData, setFormData] = useState<AppFormData>(emptyFormData(projectId));
@@ -293,7 +292,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
         banner: prev.banner || meta.banner || '',
       }));
     }).catch(() => {/* silently ignore */});
-  }, [open, hasApp, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, hasApp, isLoading, fs, cwd, projectId]);
 
   const updateField = useCallback(<K extends keyof AppFormData>(key: K, value: AppFormData[K]) => {
     setFormData(prev => ({ ...prev, [key]: value }));
