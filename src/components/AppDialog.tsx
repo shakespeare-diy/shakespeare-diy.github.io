@@ -422,31 +422,21 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
 
                 {/* Name & Description */}
                 <div className="space-y-2">
-                  <div>
-                    <Input
-                      value={formData.name}
-                      onChange={e => updateField('name', e.target.value)}
-                      placeholder="App Name"
-                      disabled={isSaving}
-                      className={submitted && !formData.name.trim() ? 'border-destructive focus-visible:ring-destructive' : ''}
-                    />
-                    {submitted && !formData.name.trim() && (
-                      <p className="text-xs text-destructive mt-1">Required</p>
-                    )}
-                  </div>
-                  <div>
-                    <Textarea
-                      value={formData.about}
-                      onChange={e => updateField('about', e.target.value)}
-                      placeholder="A short description of your app..."
-                      rows={2}
-                      disabled={isSaving}
-                      className={`resize-none${submitted && !formData.about.trim() ? ' border-destructive focus-visible:ring-destructive' : ''}`}
-                    />
-                    {submitted && !formData.about.trim() && (
-                      <p className="text-xs text-destructive mt-1">Required</p>
-                    )}
-                  </div>
+                  <Input
+                    value={formData.name}
+                    onChange={e => updateField('name', e.target.value)}
+                    placeholder="App Name"
+                    disabled={isSaving}
+                    className={submitted && !formData.name.trim() ? 'border-destructive focus-visible:ring-destructive' : ''}
+                  />
+                  <Textarea
+                    value={formData.about}
+                    onChange={e => updateField('about', e.target.value)}
+                    placeholder="A short description of your app..."
+                    rows={2}
+                    disabled={isSaving}
+                    className={`resize-none${submitted && !formData.about.trim() ? ' border-destructive focus-visible:ring-destructive' : ''}`}
+                  />
                 </div>
 
                 {/* Website */}
@@ -459,9 +449,6 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                     disabled={isSaving}
                     className={`text-sm${submitted && !formData.website.trim() ? ' border-destructive focus-visible:ring-destructive' : ''}`}
                   />
-                  {submitted && !formData.website.trim() && (
-                    <p className="text-xs text-destructive mt-1">Required</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -609,6 +596,26 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                 </div>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Validation summary */}
+            {submitted && (() => {
+              const missing = [
+                !formData.banner && 'banner',
+                !formData.picture && 'icon',
+                !formData.name.trim() && 'name',
+                !formData.about.trim() && 'description',
+                !formData.website.trim() && 'website',
+              ].filter(Boolean) as string[];
+              if (!missing.length) return null;
+              const list = missing.length === 1
+                ? missing[0]
+                : missing.slice(0, -1).join(', ') + ' and ' + missing[missing.length - 1];
+              return (
+                <p className="text-sm text-destructive">
+                  Please add a {list} before publishing.
+                </p>
+              );
+            })()}
 
             {/* Save Button */}
             <Button
