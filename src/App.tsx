@@ -80,7 +80,7 @@ const defaultConfig: AppConfig = {
   ngitWebUrl: "https://nostrhub.io/{naddr}",
   previewDomain: "local-shakespeare.dev",
   showcaseEnabled: true,
-  showcaseCurator: "",
+  showcaseCurator: "naddr1qvzqqqyckypzpyexz3t34l966ngh5xg7u2q788hthdqmj0av3lv8s2tz9t43zt6dqqxxkdrsx4mnqm3jxfeh2ess5pyrw",
   fsPathProjects: "/projects",
   fsPathConfig: "/config",
   fsPathTmp: "/tmp",
