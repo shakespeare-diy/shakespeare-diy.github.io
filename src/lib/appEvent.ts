@@ -9,6 +9,7 @@ export interface AppEventInput {
   name: string;
   about?: string;
   picture?: string;
+  banner?: string;
   website?: string;
   dTag: string;
   supportedKinds?: string[];
@@ -41,6 +42,7 @@ export async function buildAppEvent(
   if (input.name.trim()) content.name = input.name.trim();
   if (input.about?.trim()) content.about = input.about.trim();
   if (input.picture?.trim()) content.picture = input.picture.trim();
+  if (input.banner?.trim()) content.banner = input.banner.trim();
   if (input.website?.trim()) content.website = input.website.trim();
 
   // Build tags

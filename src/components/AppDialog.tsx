@@ -49,6 +49,7 @@ interface AppFormData {
   name: string;
   about: string;
   picture: string;
+  banner: string;
   website: string;
   dTag: string;
   supportedKinds: string[];
@@ -80,6 +81,7 @@ function eventToFormData(event: NostrEvent): AppFormData {
     name: metadata.name ?? '',
     about: metadata.about ?? '',
     picture: metadata.picture ?? '',
+    banner: metadata.banner ?? '',
     website: metadata.website ?? '',
     dTag,
     supportedKinds,
@@ -101,6 +103,7 @@ function emptyFormData(projectId: string): AppFormData {
     name: toTitleCase(projectId),
     about: '',
     picture: '',
+    banner: '',
     website: '',
     dTag: projectId,
     supportedKinds: [],
@@ -129,6 +132,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
 
   // Get the deployed URL from project deploy settings
   const deployedUrl = (() => {
@@ -181,6 +185,30 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const removeHandler = useCallback((index: number) => {
     updateField('webHandlers', formData.webHandlers.filter((_, i) => i !== index));
   }, [formData.webHandlers, updateField]);
+
+  const handleBannerUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const tags = await uploadFile(file);
+      const url = tags[0]?.[1];
+      if (url) {
+        updateField('banner', url);
+        toast({ title: 'Banner uploaded', description: 'Your app banner has been uploaded.' });
+      }
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: error instanceof Error ? error.message : 'Failed to upload banner.',
+        variant: 'destructive',
+      });
+    } finally {
+      if (bannerFileInputRef.current) {
+        bannerFileInputRef.current.value = '';
+      }
+    }
+  }, [uploadFile, updateField, toast]);
 
   const handleIconUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -244,6 +272,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
           name: formData.name,
           about: formData.about,
           picture: formData.picture,
+          banner: formData.banner,
           website: formData.website,
           dTag: formData.dTag,
           supportedKinds: formData.supportedKinds,
@@ -327,6 +356,48 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
           </div>
         ) : (
           <div className="space-y-5">
+            {/* Banner */}
+            <div className="relative group">
+              <input
+                ref={bannerFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleBannerUpload}
+                className="hidden"
+                disabled={isSaving || isUploading}
+              />
+              <button
+                type="button"
+                onClick={() => bannerFileInputRef.current?.click()}
+                disabled={isSaving || isUploading}
+                className="relative w-full h-24 rounded-lg overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+              >
+                {formData.banner ? (
+                  <>
+                    <img src={formData.banner} alt="App banner" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isUploading ? (
+                        <Loader2 className="h-5 w-5 text-white animate-spin" />
+                      ) : (
+                        <Pencil className="h-4 w-4 text-white" />
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-muted flex items-center justify-center gap-2 text-muted-foreground transition-colors group-hover:bg-muted-foreground group-hover:text-background">
+                    {isUploading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span className="text-xs">Upload banner</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </button>
+            </div>
+
             {/* App Preview Card */}
             <div className="flex items-start gap-4">
               {/* Icon with upload */}
