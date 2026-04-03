@@ -204,6 +204,7 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
   const [formData, setFormData] = useState<AppFormData>(emptyFormData(projectId));
   const [isSaving, setIsSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [newKind, setNewKind] = useState('');
   const [newHandlerUrl, setNewHandlerUrl] = useState('');
   const [newHandlerType, setNewHandlerType] = useState('');
@@ -401,6 +402,37 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!event) return;
+    setIsSaving(true);
+    try {
+      // Publish NIP-09 deletion event
+      await publishEvent({
+        kind: 5,
+        content: 'Deleted app',
+        tags: [['e', event.id], ['a', `31990:${event.pubkey}:${formData.dTag}`]],
+      });
+
+      // Remove the local app config
+      const dotAI = new DotAI(fs, cwd);
+      await dotAI.writeAppConfig({ a: '' });
+
+      await queryClient.invalidateQueries({ queryKey: ['app-event'] });
+
+      toast({ title: 'App deleted', description: `"${formData.name}" has been deleted.` });
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: 'Failed to delete',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -685,6 +717,47 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                       URL patterns where <code className="text-xs">{'<bech32>'}</code> will be replaced with the NIP-19 entity.
                     </p>
                   </div>
+                  {/* Delete App */}
+                  {hasApp && (
+                    <div className="pt-2 border-t">
+                      {confirmDelete ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">Are you sure? This will publish a deletion event to Nostr.</p>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="flex-1"
+                              onClick={handleDelete}
+                              disabled={isSaving}
+                            >
+                              {isSaving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                              Yes, delete
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => setConfirmDelete(false)}
+                              disabled={isSaving}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setConfirmDelete(true)}
+                          disabled={isSaving}
+                        >
+                          Delete App
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CollapsibleContent>
             </Collapsible>
