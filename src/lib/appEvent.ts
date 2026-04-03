@@ -15,6 +15,10 @@ export interface AppEventInput {
   tTags?: string[];
   supportedKinds?: string[];
   webHandlers?: Array<{ url: string; type?: string }>;
+  /** Explicit "a" tag value for the ngit repo (kind:pubkey:identifier). Overrides auto-detection from git remote. */
+  ngitRepo?: string;
+  /** Explicit "a" tag value for the nsite deployment (kind:pubkey:identifier). Overrides auto-detection from .nsite/config.json. */
+  nsiteDeployment?: string;
 }
 
 /** The content and tags for a kind 31990 event, ready to be signed/published. */
@@ -92,8 +96,10 @@ export async function buildAppEvent(
     }
   }
 
-  // If origin remote is a nostr:// URI owned by the given pubkey, add an "a" tag for the repo
-  if (opts?.fs && opts.cwd && opts.pubkey) {
+  // Add "a" tag for the ngit repo — use explicit override if provided, otherwise auto-detect from git remote
+  if (input.ngitRepo?.trim()) {
+    tags.push(['a', input.ngitRepo.trim()]);
+  } else if (opts?.fs && opts.cwd && opts.pubkey) {
     try {
       const remotes = await git.listRemotes({ fs: opts.fs, dir: opts.cwd });
       const originUrl = remotes.find(r => r.remote === 'origin')?.url;
@@ -108,8 +114,10 @@ export async function buildAppEvent(
     }
   }
 
-  // If an nsite deployment exists, add an "a" tag referencing the kind 35128 site manifest event
-  if (opts?.fs && opts.cwd && opts.pubkey) {
+  // Add "a" tag for the nsite deployment — use explicit override if provided, otherwise auto-detect from .nsite/config.json
+  if (input.nsiteDeployment?.trim()) {
+    tags.push(['a', input.nsiteDeployment.trim()]);
+  } else if (opts?.fs && opts.cwd && opts.pubkey) {
     try {
       const nsiteConfig = await readNsiteVfsConfig(opts.fs, opts.cwd);
       if (nsiteConfig?.id) {

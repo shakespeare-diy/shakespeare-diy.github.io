@@ -37,6 +37,7 @@ import {
   CircleHelp,
 } from 'lucide-react';
 import type { NostrEvent } from '@nostrify/nostrify';
+import { nip19 } from 'nostr-tools';
 
 interface AppDialogProps {
   projectId: string;
@@ -54,6 +55,8 @@ interface AppFormData {
   tTags: string[];
   supportedKinds: string[];
   webHandlers: Array<{ url: string; type: string }>;
+  ngitRepo: string;
+  nsiteDeployment: string;
 }
 
 /** Parse a kind 31990 event into form data */
@@ -82,6 +85,9 @@ function eventToFormData(event: NostrEvent): AppFormData {
     .map(([, v]) => v)
     .filter(Boolean);
 
+  const ngitATag = event.tags.find(([t, v]) => t === 'a' && v?.startsWith('30617:'))?.[1] ?? '';
+  const nsiteATag = event.tags.find(([t, v]) => t === 'a' && v?.startsWith('35128:'))?.[1] ?? '';
+
   return {
     name: metadata.name ?? '',
     about: metadata.about ?? '',
@@ -92,6 +98,8 @@ function eventToFormData(event: NostrEvent): AppFormData {
     tTags,
     supportedKinds,
     webHandlers,
+    ngitRepo: aTagToNaddr(ngitATag),
+    nsiteDeployment: aTagToNaddr(nsiteATag),
   };
 }
 
@@ -115,7 +123,34 @@ function emptyFormData(projectId: string): AppFormData {
     tTags: [],
     supportedKinds: [],
     webHandlers: [],
+    ngitRepo: '',
+    nsiteDeployment: '',
   };
+}
+
+/** Convert a "kind:pubkey:identifier" a-tag value to an naddr string, or return '' on failure. */
+function aTagToNaddr(aTag: string): string {
+  try {
+    const [kindStr, pubkey, ...rest] = aTag.split(':');
+    const kind = parseInt(kindStr);
+    const identifier = rest.join(':');
+    if (!kind || !pubkey || !identifier) return '';
+    return nip19.naddrEncode({ kind, pubkey, identifier });
+  } catch {
+    return '';
+  }
+}
+
+/** Convert an naddr string to a "kind:pubkey:identifier" a-tag value, or return '' on failure. */
+function naddrToATag(naddr: string): string {
+  try {
+    const decoded = nip19.decode(naddr.trim());
+    if (decoded.type !== 'naddr') return '';
+    const { kind, pubkey, identifier } = decoded.data;
+    return `${kind}:${pubkey}:${identifier}`;
+  } catch {
+    return '';
+  }
 }
 
 /** Read a file from VFS as a UTF-8 string, returning null if it doesn't exist. */
@@ -389,6 +424,8 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
           tTags: formData.tTags,
           supportedKinds: formData.supportedKinds,
           webHandlers: formData.webHandlers,
+          ngitRepo: naddrToATag(formData.ngitRepo),
+          nsiteDeployment: naddrToATag(formData.nsiteDeployment),
         },
         { fs, cwd, pubkey: user.pubkey },
       );
@@ -631,6 +668,40 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                     <p className="text-xs text-muted-foreground">
                       {hasApp ? 'Cannot be changed after publishing.' : 'Unique identifier for this app. Defaults to the project ID.'}
                     </p>
+                  </div>
+
+                  {/* ngit Repository */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="app-ngit" className="text-xs">Git Repository</Label>
+                    <Input
+                      id="app-ngit"
+                      value={formData.ngitRepo}
+                      onChange={e => updateField('ngitRepo', e.target.value)}
+                      placeholder="naddr1..."
+                      disabled={isSaving}
+                      className={formData.ngitRepo && !naddrToATag(formData.ngitRepo) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    />
+                    {formData.ngitRepo && !naddrToATag(formData.ngitRepo) && (
+                      <p className="text-xs text-destructive">Invalid naddr</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">naddr of the ngit repository (kind 30617). Auto-detected from git remote if left blank.</p>
+                  </div>
+
+                  {/* nsite Deployment */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="app-nsite" className="text-xs">nsite Deployment</Label>
+                    <Input
+                      id="app-nsite"
+                      value={formData.nsiteDeployment}
+                      onChange={e => updateField('nsiteDeployment', e.target.value)}
+                      placeholder="naddr1..."
+                      disabled={isSaving}
+                      className={formData.nsiteDeployment && !naddrToATag(formData.nsiteDeployment) ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    />
+                    {formData.nsiteDeployment && !naddrToATag(formData.nsiteDeployment) && (
+                      <p className="text-xs text-destructive">Invalid naddr</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">naddr of the nsite deployment (kind 35128). Auto-detected from .nsite/config.json if left blank.</p>
                   </div>
 
                   {/* Tags */}
