@@ -1,9 +1,14 @@
 # Changelog
 
-## [9.10.1] - 2026-04-02
+## [9.10.2] - 2026-04-02
 
 ### Fixed
 - Fix Android app showing default Capacitor icon instead of Shakespeare logo in app drawer
+
+## [9.10.1] - 2026-04-02
+
+### Fixed
+- Replace default Capacitor vector drawable icons with Shakespeare logo
 
 ## [9.10.0] - 2026-04-02
 
