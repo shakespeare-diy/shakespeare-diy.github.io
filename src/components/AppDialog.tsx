@@ -752,14 +752,15 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                         className="flex-1"
                       />
                       <Select
-                        value={newHandlerType}
-                        onValueChange={setNewHandlerType}
+                        value={newHandlerType || '_all_'}
+                        onValueChange={v => setNewHandlerType(v === '_all_' ? '' : v)}
                         disabled={isSaving}
                       >
                         <SelectTrigger className="w-28">
-                          <SelectValue placeholder="All" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="_all_">All</SelectItem>
                           <SelectItem value="npub">npub</SelectItem>
                           <SelectItem value="note">note</SelectItem>
                           <SelectItem value="nprofile">nprofile</SelectItem>
