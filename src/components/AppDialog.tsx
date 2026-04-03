@@ -33,7 +33,6 @@ import {
   X,
   ExternalLink,
   Pencil,
-  Upload,
   ChevronDown,
   CircleHelp,
 } from 'lucide-react';
@@ -356,8 +355,9 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
           </div>
         ) : (
           <div className="space-y-5">
-            {/* Banner */}
-            <div className="relative group">
+            {/* App Preview Card — banner + overlapping icon */}
+            <div className="border rounded-xl overflow-hidden bg-card">
+              {/* Hidden file inputs */}
               <input
                 ref={bannerFileInputRef}
                 type="file"
@@ -366,98 +366,77 @@ export function AppDialog({ projectId, open, onOpenChange }: AppDialogProps) {
                 className="hidden"
                 disabled={isSaving || isUploading}
               />
-              <button
-                type="button"
-                onClick={() => bannerFileInputRef.current?.click()}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleIconUpload}
+                className="hidden"
                 disabled={isSaving || isUploading}
-                className="relative w-full h-24 rounded-lg overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+              />
+
+              {/* Banner */}
+              <div
+                className="relative h-32 bg-muted cursor-pointer group"
+                style={formData.banner ? { backgroundImage: `url(${formData.banner})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+                onClick={() => !isSaving && !isUploading && bannerFileInputRef.current?.click()}
               >
-                {formData.banner ? (
-                  <>
-                    <img src={formData.banner} alt="App banner" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {isUploading ? (
-                        <Loader2 className="h-5 w-5 text-white animate-spin" />
-                      ) : (
-                        <Pencil className="h-4 w-4 text-white" />
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="w-full h-full bg-muted flex items-center justify-center gap-2 text-muted-foreground transition-colors group-hover:bg-muted-foreground group-hover:text-background">
-                    {isUploading ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        <span className="text-xs">Upload banner</span>
-                      </>
-                    )}
+                {!formData.banner && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-primary/5" />
+                )}
+                {!formData.banner && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Plus className="h-6 w-6 text-muted-foreground" strokeWidth={3} />
                   </div>
                 )}
-              </button>
-            </div>
-
-            {/* App Preview Card */}
-            <div className="flex items-start gap-4">
-              {/* Icon with upload */}
-              <div className="relative flex-shrink-0 group">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleIconUpload}
-                  className="hidden"
-                  disabled={isSaving || isUploading}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isSaving || isUploading}
-                  className="relative block rounded-2xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
-                >
-                  {formData.picture ? (
-                    <>
-                      <Avatar className="h-20 w-20 rounded-2xl">
-                        <AvatarImage src={formData.picture} alt={formData.name || 'App icon'} className="object-cover" />
-                        <AvatarFallback className="rounded-2xl bg-muted" />
-                      </Avatar>
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
-                        {isUploading ? (
-                          <Loader2 className="h-5 w-5 text-white animate-spin" />
-                        ) : (
-                          <Pencil className="h-4 w-4 text-white" />
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="h-20 w-20 rounded-2xl bg-muted flex items-center justify-center transition-colors group-hover:bg-muted-foreground">
-                      {isUploading ? (
-                        <Loader2 className="h-6 w-6 text-muted-foreground animate-spin group-hover:text-background" />
-                      ) : (
-                        <Upload className="h-6 w-6 text-muted-foreground transition-colors group-hover:text-background" />
-                      )}
-                    </div>
-                  )}
-                </button>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-white text-xs font-medium bg-black/50 rounded-full px-3 py-1.5 backdrop-blur-sm">
+                    {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+                    {formData.banner ? 'Change banner' : 'Add banner'}
+                  </span>
+                </div>
+                <div className="absolute bottom-2 right-2 h-7 w-7 rounded-full bg-background border border-border shadow-sm flex items-center justify-center">
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
               </div>
 
-              {/* Name & Description inline */}
-              <div className="flex-1 min-w-0 space-y-2">
-                <Input
-                  value={formData.name}
-                  onChange={e => updateField('name', e.target.value)}
-                  placeholder="App Name"
-                  disabled={isSaving}
-                />
-                <Textarea
-                  value={formData.about}
-                  onChange={e => updateField('about', e.target.value)}
-                  placeholder="A short description of your app..."
-                  rows={2}
-                  disabled={isSaving}
-                  className="resize-none"
-                />
+              {/* Icon + Name/Description */}
+              <div className="px-4 pb-4">
+                {/* Icon overlapping banner */}
+                <div className="-mt-10 mb-3">
+                  <div className="relative inline-block group cursor-pointer" onClick={() => !isSaving && !isUploading && fileInputRef.current?.click()}>
+                    <Avatar className="h-20 w-20 rounded-2xl border-4 border-background shadow-sm">
+                      <AvatarImage src={formData.picture} alt={formData.name || 'App icon'} className="object-cover" />
+                      <AvatarFallback className="rounded-2xl bg-muted">
+                        {formData.picture ? null : <Plus className="h-7 w-7 text-muted-foreground" strokeWidth={3} />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                      <Pencil className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                    </div>
+                    <div className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-background border border-border shadow-sm flex items-center justify-center">
+                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Name & Description */}
+                <div className="space-y-2">
+                  <Input
+                    value={formData.name}
+                    onChange={e => updateField('name', e.target.value)}
+                    placeholder="App Name"
+                    disabled={isSaving}
+                  />
+                  <Textarea
+                    value={formData.about}
+                    onChange={e => updateField('about', e.target.value)}
+                    placeholder="A short description of your app..."
+                    rows={2}
+                    disabled={isSaving}
+                    className="resize-none"
+                  />
+                </div>
               </div>
             </div>
 
