@@ -1,4 +1,26 @@
+import type { NsiteProvider } from '@/contexts/DeploySettingsContext';
 import type { PresetDeployProvider } from './deploy/types';
+
+/** Default nsite provider configuration, pre-configured for new users. */
+export const DEFAULT_NSITE_PROVIDER: NsiteProvider = {
+  id: 'nsite',
+  name: 'nsite',
+  type: 'nsite',
+  gateway: 'shakespeare.to',
+  relayUrls: [
+    'wss://relay.ditto.pub',
+    'wss://relay.dreamith.to',
+    'wss://relay.nsite.lol',
+    'wss://relay.nosto.re',
+    'wss://relay.primal.net',
+  ],
+  blossomServers: [
+    'https://blossom.ditto.pub',
+    'https://blossom.dreamith.to',
+    'https://blossom.primal.net',
+    'https://cdn.sovbit.host',
+  ],
+};
 
 export const PRESET_DEPLOY_PROVIDERS: PresetDeployProvider[] = [
   {

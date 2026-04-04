@@ -3,9 +3,10 @@ import { DeploySettingsContext, type DeploySettings, type DeployProvider } from 
 import { useFS } from '@/hooks/useFS';
 import { useFSPaths } from '@/hooks/useFSPaths';
 import { readDeploySettings, writeDeploySettings } from '@/lib/configUtils';
+import { DEFAULT_NSITE_PROVIDER } from '@/lib/deployProviderPresets';
 
 const DEFAULT_SETTINGS: DeploySettings = {
-  providers: [],
+  providers: [DEFAULT_NSITE_PROVIDER],
 };
 
 export function DeploySettingsProvider({ children }: { children: ReactNode }) {

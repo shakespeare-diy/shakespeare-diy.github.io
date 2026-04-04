@@ -152,7 +152,7 @@ export function ProviderConfigDialog({
                 items={localProvider.blossomServers ?? []}
                 onChange={(servers) => setLocalProvider({ ...localProvider, blossomServers: servers })}
                 protocol="https"
-                placeholder="blossom.primal.net"
+                placeholder="blossom.ditto.pub"
                 required
               />
             </>

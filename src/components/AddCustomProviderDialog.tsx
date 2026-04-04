@@ -86,7 +86,7 @@ export function AddCustomProviderDialog({
         name: customName.trim(),
         gateway: customGateway.trim() || 'shakespeare.to',
         relayUrls: customRelayUrls.length > 0 ? customRelayUrls : ['wss://relay.ditto.pub'],
-        blossomServers: customBlossomServers.length > 0 ? customBlossomServers : ['https://blossom.primal.net/'],
+        blossomServers: customBlossomServers.length > 0 ? customBlossomServers : ['https://blossom.ditto.pub/', 'https://blossom.dreamith.to/'],
       };
     } else if (customProviderType === 'netlify') {
       if (!customApiKey.trim()) return;
@@ -269,7 +269,7 @@ export function AddCustomProviderDialog({
                     items={customBlossomServers}
                     onChange={setCustomBlossomServers}
                     protocol="https"
-                    placeholder="blossom.primal.net"
+                    placeholder="blossom.ditto.pub"
                   />
                 </>
               ) : (

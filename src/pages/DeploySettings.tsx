@@ -9,7 +9,7 @@ import { useVercelOAuth } from '@/hooks/useVercelOAuth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import type { DeployProvider } from '@/contexts/DeploySettingsContext';
 import type { PresetDeployProvider } from '@/lib/deploy/types';
-import { PRESET_DEPLOY_PROVIDERS } from '@/lib/deployProviderPresets';
+import { PRESET_DEPLOY_PROVIDERS, DEFAULT_NSITE_PROVIDER } from '@/lib/deployProviderPresets';
 import { ExternalFavicon } from '@/components/ExternalFavicon';
 import { ProviderConfigDialog } from '@/components/ProviderConfigDialog';
 import { AddDeployProviderDialog } from '@/components/AddDeployProviderDialog';
@@ -202,24 +202,7 @@ export function DeploySettings() {
         ...(preset.proxy && { proxy: true }),
       };
     } else if (preset.type === 'nsite') {
-      newProvider = {
-        id: preset.id, // Use preset ID for presets
-        name: preset.name,
-        type: 'nsite',
-        gateway: 'shakespeare.to',
-        relayUrls: [
-          'wss://relay.ditto.pub',
-          'wss://relay.nsite.lol',
-          'wss://relay.nosto.re',
-          'wss://relay.primal.net',
-          'wss://relay.damus.io',
-          'wss://purplerelay.com',
-        ],
-        blossomServers: [
-          'https://blossom.primal.net',
-          'https://cdn.sovbit.host',
-        ],
-      };
+      newProvider = { ...DEFAULT_NSITE_PROVIDER };
     } else if (preset.type === 'netlify') {
       newProvider = {
         id: preset.id, // Use preset ID for presets

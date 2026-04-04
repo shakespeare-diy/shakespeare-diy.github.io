@@ -45,7 +45,7 @@ export class BlossomUploadTool implements Tool<BlossomUploadParams> {
     });
 
     const uploader = new BlossomUploader({
-      servers: ['https://blossom.primal.net/', 'https://blossom.ditto.pub/'],
+      servers: ['https://blossom.ditto.pub/', 'https://blossom.dreamith.to/', 'https://blossom.primal.net/'],
       signer: this.signer,
     });
 

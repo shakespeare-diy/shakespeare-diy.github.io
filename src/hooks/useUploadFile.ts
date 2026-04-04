@@ -14,8 +14,9 @@ export function useUploadFile() {
 
       const uploader = new BlossomUploader({
         servers: [
-          'https://blossom.primal.net/',
           'https://blossom.ditto.pub/',
+          'https://blossom.dreamith.to/',
+          'https://blossom.primal.net/',
         ],
         signer: user.signer,
       });
