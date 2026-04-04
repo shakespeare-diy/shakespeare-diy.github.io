@@ -4,7 +4,7 @@ import { AISettingsContext, type AISettings, type AIProvider, type MCPServer, ty
 import { useFS } from '@/hooks/useFS';
 import { useFSPaths } from '@/hooks/useFSPaths';
 import { readAISettings, writeAISettings } from '@/lib/configUtils';
-import { OPENCODE_DEFAULT_SETTINGS } from '@/lib/opencode-defaults';
+import { EMPTY_AI_SETTINGS, OPENCODE_DEFAULT_SETTINGS } from '@/lib/opencode-defaults';
 
 interface AISettingsProviderProps {
   children: ReactNode;
@@ -14,18 +14,23 @@ export function AISettingsProvider({ children }: AISettingsProviderProps) {
   const queryClient = useQueryClient();
   const { fs } = useFS();
   const { configPath } = useFSPaths();
-  const [settings, setSettings] = useState<AISettings>(OPENCODE_DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AISettings>(EMPTY_AI_SETTINGS);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize settings from VFS on mount
   useEffect(() => {
     const initializeSettings = async () => {
       try {
-        const settings = await readAISettings(fs, configPath);
-        setSettings(settings);
+        const loaded = await readAISettings(fs, configPath);
+        // Only apply OpenCode defaults for genuinely new users (no providers configured)
+        if (loaded.providers.length === 0) {
+          setSettings(OPENCODE_DEFAULT_SETTINGS);
+        } else {
+          setSettings(loaded);
+        }
       } catch (error) {
         console.error('Failed to initialize AI settings:', error);
-        setSettings(OPENCODE_DEFAULT_SETTINGS);
+        setSettings(EMPTY_AI_SETTINGS);
       } finally {
         setIsInitialized(true);
       }
