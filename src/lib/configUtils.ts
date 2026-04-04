@@ -1,6 +1,7 @@
 import z from 'zod';
 import { filteredArray } from '@/lib/schema';
 import { AI_PROVIDER_PRESETS } from '@/lib/aiProviderPresets';
+import { OPENCODE_DEFAULT_SETTINGS } from '@/lib/opencode-defaults';
 import type { JSRuntimeFS } from '@/lib/JSRuntime';
 import type { AISettings, MCPServer } from '@/contexts/AISettingsContext';
 import type { GitSettings, GitCredential } from '@/contexts/GitSettingsContext';
@@ -169,12 +170,6 @@ async function ensureConfigDir(fs: JSRuntimeFS, configPath = '/config'): Promise
  * @param configPath - Custom config path (default: /config)
  */
 export async function readAISettings(fs: JSRuntimeFS, configPath = '/config'): Promise<AISettings> {
-  const defaultSettings: AISettings = {
-    providers: [],
-    recentlyUsedModels: [],
-    mcpServers: {},
-  };
-
   try {
     const aiConfigPath = getAIConfigPath(configPath);
     const content = await fs.readFile(aiConfigPath, 'utf8');
@@ -210,7 +205,7 @@ export async function readAISettings(fs: JSRuntimeFS, configPath = '/config'): P
     if (error instanceof z.ZodError) {
       console.error('AI settings parsing error:', error.issues);
     }
-    return defaultSettings;
+    return OPENCODE_DEFAULT_SETTINGS;
   }
 }
 

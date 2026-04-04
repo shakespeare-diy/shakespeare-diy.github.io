@@ -7,6 +7,7 @@ import {
   readDeploySettings,
   writeDeploySettings
 } from './configUtils';
+import { OPENCODE_DEFAULT_SETTINGS } from './opencode-defaults';
 import type { JSRuntimeFS } from './JSRuntime';
 import type { AISettings } from '@/contexts/AISettingsContext';
 import type { GitSettings } from '@/contexts/GitSettingsContext';
@@ -89,30 +90,22 @@ describe('configUtils', () => {
         });
       });
 
-      it('should return default settings if file does not exist and no localStorage data', async () => {
+      it('should return default settings with OpenCode Zen if file does not exist and no localStorage data', async () => {
         vi.mocked(mockFS.readFile).mockRejectedValue(new Error('File not found'));
         mockLocalStorage.getItem.mockReturnValue(null);
 
         const result = await readAISettings(mockFS);
 
-        expect(result).toEqual({
-          providers: [],
-          recentlyUsedModels: [],
-          mcpServers: {},
-        });
+        expect(result).toEqual(OPENCODE_DEFAULT_SETTINGS);
       });
 
-      it('should return default settings if JSON is invalid and no localStorage data', async () => {
+      it('should return default settings with OpenCode Zen if JSON is invalid and no localStorage data', async () => {
         vi.mocked(mockFS.readFile).mockResolvedValue('invalid json');
         mockLocalStorage.getItem.mockReturnValue(null);
 
         const result = await readAISettings(mockFS);
 
-        expect(result).toEqual({
-          providers: [],
-          recentlyUsedModels: [],
-          mcpServers: {},
-        });
+        expect(result).toEqual(OPENCODE_DEFAULT_SETTINGS);
       });
     });
 

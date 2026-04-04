@@ -36,6 +36,16 @@ export function createAIClient(provider: AIProvider, user?: NUser, corsProxy?: s
         request = new Request(request, { headers });
       }
 
+      // Add OpenCode headers for higher rate limit
+      if (provider.id === 'opencode' || provider.baseURL === 'https://opencode.ai/zen/v1') {
+        const headers = new Headers(request.headers);
+        headers.set('x-opencode-project', 'shakespeare');
+        headers.set('x-opencode-session', 'shakespeare');
+        headers.set('x-opencode-request', crypto.randomUUID());
+        headers.set('x-opencode-client', 'shakespeare');
+        request = new Request(request, { headers });
+      }
+
       // If Nostr authentication is required and we have a user, use NIP-98
       if (provider.nostr && user?.signer) {
         // Create the NIP98 token
