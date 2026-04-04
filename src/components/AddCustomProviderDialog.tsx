@@ -84,7 +84,7 @@ export function AddCustomProviderDialog({
       provider = {
         type: 'nsite',
         name: customName.trim(),
-        gateway: customGateway.trim() || 'nsite.lol',
+        gateway: customGateway.trim() || 'shakespeare.to',
         relayUrls: customRelayUrls.length > 0 ? customRelayUrls : ['wss://relay.ditto.pub'],
         blossomServers: customBlossomServers.length > 0 ? customBlossomServers : ['https://blossom.primal.net/'],
       };
@@ -252,7 +252,7 @@ export function AddCustomProviderDialog({
                     <Label htmlFor="custom-gateway">Gateway</Label>
                     <Input
                       id="custom-gateway"
-                      placeholder="nsite.lol"
+                       placeholder="shakespeare.to"
                       value={customGateway}
                       onChange={(e) => setCustomGateway(e.target.value)}
                     />

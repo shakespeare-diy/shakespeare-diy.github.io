@@ -134,7 +134,7 @@ export function ProviderConfigDialog({
                 </Label>
                 <Input
                   id="provider-gateway"
-                  placeholder="nsite.lol"
+                   placeholder="shakespeare.to"
                   value={localProvider.gateway || ''}
                   onChange={(e) => setLocalProvider({ ...localProvider, gateway: e.target.value })}
                 />

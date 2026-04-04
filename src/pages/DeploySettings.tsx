@@ -206,7 +206,7 @@ export function DeploySettings() {
         id: preset.id, // Use preset ID for presets
         name: preset.name,
         type: 'nsite',
-        gateway: 'nosto.re',
+        gateway: 'shakespeare.to',
         relayUrls: [
           'wss://relay.ditto.pub',
           'wss://relay.nsite.lol',
