@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { nip19 } from 'nostr-tools';
 import type { NostrEvent, NostrFilter, NRelay, NPool } from '@nostrify/nostrify';
 import { useAppContext } from '@/hooks/useAppContext';
+import { NostrURI } from '@/lib/NostrURI';
 
 export interface AppSubmission extends NostrEvent {
   appName: string;
@@ -79,7 +80,7 @@ function repositoryUrlFromATag(aTagValue: string): string {
   const parts = aTagValue.split(':');
   if (parts.length < 3) return '';
   const [, pubkey, identifier] = parts;
-  return `nostr://${pubkey}/${identifier}`;
+  return new NostrURI({ pubkey, identifier }).toString();
 }
 
 export function useAppSubmissions() {
