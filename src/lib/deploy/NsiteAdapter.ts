@@ -77,6 +77,84 @@ async function createBatchUploadAuth(
 }
 
 /**
+ * Vanity subdomain name rules from VANITY.md:
+ *  - 1–49 characters long
+ *  - lowercase letters, digits, and hyphens only
+ *  - cannot start or end with a hyphen
+ */
+const VANITY_NAME_REGEX = /^[a-z0-9]([a-z0-9-]{0,47}[a-z0-9])?$/;
+
+const VANITY_RESERVED_NAMES = new Set([
+  'www', 'api', 'status', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
+  'ns1', 'ns2', 'ns3', 'ns4', 'localhost', 'autoconfig', 'autodiscover', '_dmarc',
+]);
+
+/**
+ * Check whether a site identifier qualifies as a valid vanity name candidate.
+ * This is a client-side pre-check — the gateway is the source of truth.
+ */
+function isVanityCandidate(name: string): boolean {
+  return (
+    name.length >= 1 &&
+    name.length <= 49 &&
+    VANITY_NAME_REGEX.test(name) &&
+    !VANITY_RESERVED_NAMES.has(name)
+  );
+}
+
+/**
+ * After a named-site deploy, probe the gateway to see if a vanity subdomain was
+ * assigned. Not all gateways support vanity subdomains, so this is best-effort.
+ *
+ * Returns the vanity URL (e.g. "https://ditto.shakespeare.wtf") if the gateway
+ * confirms the vanity name belongs to this pubkey, or `undefined` otherwise.
+ */
+async function probeVanityUrl(
+  gateway: string,
+  siteIdentifier: string,
+  pubkey: string,
+): Promise<string | undefined> {
+  // Quick client-side guard — skip the network request if the name is obviously invalid
+  if (!isVanityCandidate(siteIdentifier)) {
+    return undefined;
+  }
+
+  const vanityOrigin = `https://${siteIdentifier}.${gateway}`;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const resp = await fetch(`${vanityOrigin}/`, {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
+
+      // Check for the X-Nsite-* headers that indicate vanity support
+      const nsitePubkey = resp.headers.get('x-nsite-pubkey');
+      const nsiteName = resp.headers.get('x-nsite-name');
+
+      // Vanity name is confirmed when the gateway returns the name header
+      // AND the pubkey matches ours (i.e. we own this vanity name).
+      if (nsiteName && nsitePubkey === pubkey) {
+        return vanityOrigin;
+      }
+
+      // If the response is a 404 with X-Nsite-Available: true, the name hasn't
+      // been reserved yet. It will likely be claimed once the gateway processes
+      // our manifest, but we can't confirm it right now — return undefined and
+      // let the next deploy pick it up.
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    // Network error, gateway doesn't support vanity, CORS blocked, etc.
+    return undefined;
+  }
+}
+
+/**
  * Check whether a blob already exists on a Blossom server.
  * Returns true if the server responds 2xx to a HEAD request.
  */
@@ -327,7 +405,7 @@ export class NsiteAdapter implements DeployAdapter {
     // no separate kind 10002 or kind 10063 events are published.
     await relayClient.event(manifestEvent, { signal: AbortSignal.timeout(10_000) });
 
-    // Build the deployed URL
+    // Build the canonical deployed URL (always the long-form base36 or npub URL)
     const siteUrl = buildNsiteUrl({
       pubkeyHex: pubkey,
       npub,
@@ -335,8 +413,17 @@ export class NsiteAdapter implements DeployAdapter {
       siteIdentifier: this.siteIdentifier,
     });
 
+    // For named sites, probe whether the gateway assigned a vanity subdomain.
+    // This is best-effort — if the gateway doesn't support vanity, we just
+    // return the canonical URL and move on.
+    let vanityUrl: string | undefined;
+    if (isNamedSite && this.siteIdentifier) {
+      vanityUrl = await probeVanityUrl(this.gateway, this.siteIdentifier, pubkey);
+    }
+
     return {
-      url: siteUrl,
+      // Prefer the short vanity URL when confirmed by the gateway
+      url: vanityUrl ?? siteUrl,
       metadata: {
         pubkey,
         npub,
@@ -344,6 +431,8 @@ export class NsiteAdapter implements DeployAdapter {
         provider: 'nsite',
         siteIdentifier: this.siteIdentifier,
         manifestKind,
+        vanityUrl,
+        canonicalUrl: siteUrl,
       },
     };
   }

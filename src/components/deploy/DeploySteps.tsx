@@ -612,6 +612,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
                   <span className="font-medium">{nsiteVfsConfig.title}</span>
                 </div>
               )}
+
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Relays</span>
                 <span className="font-medium">{relayCount} configured</span>
@@ -798,6 +799,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
                 <ExternalLink className="h-4 w-4" />
               </Button>
             </div>
+
           </div>
 
           <div className="flex justify-end gap-2">
