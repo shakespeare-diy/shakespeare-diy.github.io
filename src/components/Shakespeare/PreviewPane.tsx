@@ -1,5 +1,5 @@
 import { encodeBase64 } from '@std/encoding/base64';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectsManager } from '@/hooks/useProjectsManager';
 import { useFS } from '@/hooks/useFS';
@@ -25,6 +25,7 @@ import { Terminal as TerminalComponent } from '@/components/Terminal';
 import { useSearchParams } from 'react-router-dom';
 import { useAppContext } from '@/hooks/useAppContext';
 import { isMediaFile } from '@/lib/fileUtils';
+import { deriveIframeSubdomain } from '@/lib/iframeSubdomain';
 import { getPreviewInjectedScript } from '@/lib/previewInjectedScript';
 
 interface PreviewPaneProps {
@@ -68,6 +69,13 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
   const { t } = useTranslation();
   const { config } = useAppContext();
   const { previewDomain } = config;
+
+  // Derive a private, stable subdomain from a device-local seed + the project ID.
+  // This prevents malicious project names from colliding with another project's
+  // origin on iframe.diy, protecting localStorage/IndexedDB isolation.
+  const previewSubdomain = useMemo(() => deriveIframeSubdomain('preview', projectId), [projectId]);
+  const previewOrigin = useMemo(() => `https://${previewSubdomain}.${previewDomain}`, [previewSubdomain, previewDomain]);
+
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -183,18 +191,15 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
 
   const sendResponse = useCallback((message: JSONRPCResponse) => {
     if (iframeRef.current?.contentWindow) {
-
-      const targetOrigin = `https://${projectId}.${previewDomain}`;
-      iframeRef.current.contentWindow.postMessage(message, targetOrigin);
+      iframeRef.current.contentWindow.postMessage(message, previewOrigin);
     }
-  }, [projectId, previewDomain]);
+  }, [previewOrigin]);
 
   const sendError = useCallback((message: JSONRPCResponse) => {
     if (iframeRef.current?.contentWindow) {
-      const targetOrigin = `https://${projectId}.${previewDomain}`;
-      iframeRef.current.contentWindow.postMessage(message, targetOrigin);
+      iframeRef.current.contentWindow.postMessage(message, previewOrigin);
     }
-  }, [projectId, previewDomain]);
+  }, [previewOrigin]);
 
   const handleConsoleMessage = useCallback((message: {
     jsonrpc: '2.0';
@@ -256,10 +261,9 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
         method,
         params: params || {},
       };
-      const targetOrigin = `https://${projectId}.${previewDomain}`;
-      iframeRef.current.contentWindow.postMessage(message, targetOrigin);
+      iframeRef.current.contentWindow.postMessage(message, previewOrigin);
     }
-  }, [projectId, previewDomain]);
+  }, [previewOrigin]);
 
   const sendNavigationCommand = useCallback((method: string, params?: Record<string, unknown>) => {
     if (iframeRef.current?.contentWindow) {
@@ -269,10 +273,9 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
         params: params || {},
         id: Date.now()
       };
-      const targetOrigin = `https://${projectId}.${previewDomain}`;
-      iframeRef.current.contentWindow.postMessage(message, targetOrigin);
+      iframeRef.current.contentWindow.postMessage(message, previewOrigin);
     }
-  }, [projectId, previewDomain]);
+  }, [previewOrigin]);
 
   const navigateIframe = useCallback((url: string) => {
     // Send semantic path directly (e.g., "/about", "/contact")
@@ -307,16 +310,15 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
     try {
       // Parse the URL and validate origin
       const url = new URL(fetchRequest.url);
-      const expectedOrigin = `https://${projectId}.${previewDomain}`;
 
-      if (url.origin !== expectedOrigin) {
-        console.log(`Invalid origin: ${url.origin}, expected: ${expectedOrigin}`);
+      if (url.origin !== previewOrigin) {
+        console.log(`Invalid origin: ${url.origin}, expected: ${previewOrigin}`);
         sendError({
           jsonrpc: '2.0',
           error: {
             code: -32003,
             message: 'Invalid URL - origin mismatch',
-            data: { url: fetchRequest.url, expectedOrigin }
+            data: { url: fetchRequest.url, expectedOrigin: previewOrigin }
           },
           id
         });
@@ -446,14 +448,13 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
         id
       });
     }
-  }, [projectId, projectsManager, sendResponse, sendError, previewDomain, injectScript]);
+  }, [projectId, projectsManager, sendResponse, sendError, previewOrigin, injectScript]);
 
   // Setup messaging protocol for iframe communication
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Verify origin for security
-      const expectedOrigin = `https://${projectId}.${previewDomain}`;
-      if (event.origin !== expectedOrigin) {
+      if (event.origin !== previewOrigin) {
         return;
       }
 
@@ -477,7 +478,7 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [handleFetch, handleConsoleMessage, handleUpdateNavigationState, sendNotification, projectId, previewDomain]);
+  }, [handleFetch, handleConsoleMessage, handleUpdateNavigationState, sendNotification, previewOrigin]);
 
   useEffect(() => {
     if (selectedFile) {
@@ -710,7 +711,7 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
                           <iframe
                             key={projectId}
                             ref={iframeRef}
-                            src={`https://${projectId}.${previewDomain}/`}
+                            src={`${previewOrigin}/`}
                             className="w-full h-full border-0"
                             title="Project Preview"
                           />
