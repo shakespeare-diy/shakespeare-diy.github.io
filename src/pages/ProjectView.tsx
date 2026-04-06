@@ -389,6 +389,11 @@ export function ProjectView() {
               open={deleteDialogOpen}
               onOpenChange={setDeleteDialogOpen}
             />
+            <AppDialog
+              projectId={project.id}
+              open={appDialogOpen}
+              onOpenChange={setAppDialogOpen}
+            />
           </>
         )}
       </div>
