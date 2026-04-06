@@ -1,5 +1,18 @@
 # Changelog
 
+## [9.11.1] - 2026-04-05
+
+### Changed
+- Switch preview pane to iframe.diy for improved reliability and compatibility
+- New users start with OpenCode Zen pre-configured for a zero-setup first experience
+- Default nsite gateway changed to shakespeare.to with vanity subdomain support
+- Update default Blossom servers and relay lists across deployments and uploads
+
+### Fixed
+- Default settings no longer override existing users' recently used models
+- Showcase card clone URLs now use proper Nostr URI encoding
+- Service worker no longer blocks SvelteKit nsite routes
+
 ## [9.11.0] - 2026-04-03
 
 ### Added
