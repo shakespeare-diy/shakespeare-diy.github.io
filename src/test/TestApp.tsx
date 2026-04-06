@@ -47,7 +47,7 @@ export function TestApp({ children }: TestAppProps) {
     gitProxyOrigins: ['https://github.com', 'https://gitlab.com'],
     faviconUrl: 'https://external-content.duckduckgo.com/ip3/{hostname}.ico',
     ngitWebUrl: 'https://nostrhub.io/{naddr}',
-    previewDomain: 'iframe.diy',
+    previewDomain: 'local-shakespeare.dev',
     language: 'en',
     showcaseEnabled: true,
     showcaseCurator: '',
