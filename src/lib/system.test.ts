@@ -33,7 +33,7 @@ const testConfig: AppConfig = {
   gitProxyOrigins: ['https://github.com', 'https://gitlab.com'],
   faviconUrl: 'https://external-content.duckduckgo.com/ip3/{hostname}.ico',
   ngitWebUrl: 'https://nostrhub.io/{naddr}',
-  previewDomain: 'local-shakespeare.dev',
+  previewDomain: 'iframe.diy',
   language: 'en',
   showcaseEnabled: true,
   showcaseCurator: '',

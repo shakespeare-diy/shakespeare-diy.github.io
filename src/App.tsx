@@ -78,7 +78,7 @@ const defaultConfig: AppConfig = {
   gitProxyOrigins: ["https://github.com", "https://gitlab.com"],
   faviconUrl: "https://favicon.shakespeare.diy/?url={href}",
   ngitWebUrl: "https://nostrhub.io/{naddr}",
-  previewDomain: "local-shakespeare.dev",
+  previewDomain: "iframe.diy",
   showcaseEnabled: true,
   showcaseCurator: "naddr1qvzqqqr4xqpzq7q6z5ns2hm5c8msyv83qwzxpxe52j8c4d4q5m92wsp9sflelkh9qqjrvdrxxajnqvny95mkyc33956xvwfk94sn2vek94sn2et9ve3kycfexfnryvty32j",
   fsPathProjects: "/projects",

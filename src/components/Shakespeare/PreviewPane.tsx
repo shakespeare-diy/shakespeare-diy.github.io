@@ -25,6 +25,7 @@ import { Terminal as TerminalComponent } from '@/components/Terminal';
 import { useSearchParams } from 'react-router-dom';
 import { useAppContext } from '@/hooks/useAppContext';
 import { isMediaFile } from '@/lib/fileUtils';
+import { getPreviewInjectedScript } from '@/lib/previewInjectedScript';
 
 interface PreviewPaneProps {
   projectId: string;
@@ -248,6 +249,18 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
     }
   }, [historyIndex, navigationHistory]);
 
+  const sendNotification = useCallback((method: string, params?: Record<string, unknown>) => {
+    if (iframeRef.current?.contentWindow) {
+      const message = {
+        jsonrpc: '2.0' as const,
+        method,
+        params: params || {},
+      };
+      const targetOrigin = `https://${projectId}.${previewDomain}`;
+      iframeRef.current.contentWindow.postMessage(message, targetOrigin);
+    }
+  }, [projectId, previewDomain]);
+
   const sendNavigationCommand = useCallback((method: string, params?: Record<string, unknown>) => {
     if (iframeRef.current?.contentWindow) {
       const message = {
@@ -273,6 +286,18 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(prev => !prev);
+  }, []);
+
+  /** Virtual path where the injected preview script is served. */
+  const INJECTED_SCRIPT_PATH = '/__injected__/preview.js';
+
+  /** Inject a script tag into an HTML string using DOMParser. */
+  const injectScript = useCallback((html: string): string => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const tag = doc.createElement('script');
+    tag.src = INJECTED_SCRIPT_PATH;
+    doc.head.insertBefore(tag, doc.head.firstChild);
+    return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
   }, []);
 
   const handleFetch = useCallback(async (request: JSONRPCRequest) => {
@@ -301,13 +326,41 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
       const path = url.pathname;
       const filePath = path;
 
+      // Serve the injected preview script at its virtual path
+      if (path === INJECTED_SCRIPT_PATH) {
+        sendResponse({
+          jsonrpc: '2.0',
+          result: {
+            status: 200,
+            statusText: 'OK',
+            headers: {
+              'Content-Type': 'application/javascript',
+              'Cache-Control': 'no-cache',
+            },
+            body: encodeBase64(new TextEncoder().encode(getPreviewInjectedScript())),
+          },
+          id
+        });
+        return;
+      }
+
       // Skip SPA fallback for static assets (files with extensions)
       const isStaticAsset = /\.[a-zA-Z0-9]+$/.test(path);
 
       // SPA routing: try to serve the exact file first
       try {
         const bytes = await projectsManager.readFileBytes(projectId, 'dist' + filePath);
+        const contentType = getContentType(filePath);
         console.log(`Serving file: ${filePath}`);
+
+        // Inject preview script into HTML responses
+        let body: string;
+        if (contentType === 'text/html') {
+          const html = new TextDecoder().decode(bytes);
+          body = encodeBase64(new TextEncoder().encode(injectScript(html)));
+        } else {
+          body = encodeBase64(bytes);
+        }
 
         sendResponse({
           jsonrpc: '2.0',
@@ -315,10 +368,10 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
             status: 200,
             statusText: 'OK',
             headers: {
-              'Content-Type': getContentType(filePath),
+              'Content-Type': contentType,
               'Cache-Control': 'no-cache',
             },
-            body: encodeBase64(bytes),
+            body,
           },
           id
         });
@@ -349,6 +402,10 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
         const bytes = await projectsManager.readFileBytes(projectId, 'dist/index.html');
         console.log(`Serving index.html fallback for: ${path}`);
 
+        // Inject preview script into SPA fallback HTML
+        const html = new TextDecoder().decode(bytes);
+        const body = encodeBase64(new TextEncoder().encode(injectScript(html)));
+
         sendResponse({
           jsonrpc: '2.0',
           result: {
@@ -358,7 +415,7 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
               'Content-Type': 'text/html',
               'Cache-Control': 'no-cache',
             },
-            body: encodeBase64(bytes),
+            body,
           },
           id
         });
@@ -389,7 +446,7 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
         id
       });
     }
-  }, [projectId, projectsManager, sendResponse, sendError, previewDomain]);
+  }, [projectId, projectsManager, sendResponse, sendError, previewDomain, injectScript]);
 
   // Setup messaging protocol for iframe communication
   useEffect(() => {
@@ -397,24 +454,30 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
       // Verify origin for security
       const expectedOrigin = `https://${projectId}.${previewDomain}`;
       if (event.origin !== expectedOrigin) {
-        console.log(`Ignoring message from unexpected origin: ${event.origin}, expected: ${expectedOrigin}`);
         return;
       }
 
       const message = event.data;
-      console.log('Received message from iframe:', message);
-      if (message.jsonrpc === '2.0' && message.method === 'fetch') {
+      if (!message || typeof message !== 'object' || message.jsonrpc !== '2.0') return;
+
+      // Handle iframe.diy handshake: respond to "ready" with "init"
+      if (message.method === 'ready') {
+        sendNotification('init', { version: 1 });
+        return;
+      }
+
+      if (message.method === 'fetch') {
         handleFetch(message);
-      } else if (message.jsonrpc === '2.0' && message.method === 'console') {
+      } else if (message.method === 'console') {
         handleConsoleMessage(message);
-      } else if (message.jsonrpc === '2.0' && message.method === 'updateNavigationState') {
+      } else if (message.method === 'updateNavigationState') {
         handleUpdateNavigationState(message);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [handleFetch, handleConsoleMessage, handleUpdateNavigationState, projectId, previewDomain]);
+  }, [handleFetch, handleConsoleMessage, handleUpdateNavigationState, sendNotification, projectId, previewDomain]);
 
   useEffect(() => {
     if (selectedFile) {
@@ -650,7 +713,6 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
                             src={`https://${projectId}.${previewDomain}/`}
                             className="w-full h-full border-0"
                             title="Project Preview"
-                            sandbox="allow-scripts allow-same-origin allow-forms"
                           />
                         </div>
                       ) : (

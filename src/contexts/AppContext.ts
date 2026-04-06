@@ -44,7 +44,7 @@ export interface AppConfig {
   faviconUrl: string;
   /** Nostr Git web URL template (e.g., "https://nostrhub.io/{naddr}") */
   ngitWebUrl: string;
-  /** Preview domain for iframe sandboxing (e.g., "local-shakespeare.dev") */
+  /** Preview domain for iframe sandboxing (e.g., "iframe.diy") */
   previewDomain: string;
   /** Selected language */
   language?: string;
