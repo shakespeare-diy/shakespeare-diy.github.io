@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.11.2] - 2026-04-06
+
+### Fixed
+- Derive private preview subdomains with HMAC to prevent cross-project origin collisions on iframe.diy
+
 ## [9.11.1] - 2026-04-05
 
 ### Changed
