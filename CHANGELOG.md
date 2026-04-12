@@ -1,5 +1,11 @@
 # Changelog
 
+## [9.11.3] - 2026-04-12
+
+### Fixed
+- App publish dialog now appears on mobile devices
+- Changelog available offline via ServiceWorker precache
+
 ## [9.11.2] - 2026-04-06
 
 ### Fixed
