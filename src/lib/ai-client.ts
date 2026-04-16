@@ -74,40 +74,82 @@ export function createAIClient(provider: AIProvider, user?: NUser, corsProxy?: s
   openai.chat.completions.create = ((...[body, options]: Parameters<typeof createCompletion>) => {
     // OpenRouter-specific hacks
     if (provider.id === "openrouter" || provider.baseURL === "https://openrouter.ai/api/v1") {
-      // Usage accounting field to get token usage and cost per request
-      // https://openrouter.ai/docs/use-cases/usage-accounting
-      (body as { usage?: { include?: boolean } }).usage = { include: true };
-
-      // Prompt caching for Claude models
-      // https://openrouter.ai/docs/guides/best-practices/prompt-caching#anthropic-claude
-      if (body.model.startsWith("anthropic/")) {
-        // First normalize the message history to use content blocks
-        body.messages = structuredClone(body.messages);
-        body.messages = body.messages.map((m) => {
-          if (m.role !== "function" && typeof m.content === "string") {
-            return { ...m, content: [{ type: "text", text: m.content }] };
-          } else {
-            return m;
-          }
-        });
-
-        const systemMessage = body.messages.find((m) => m.role === "system");
-        const nonSystemMessages = body.messages.filter((m) => m.role !== "system");
-        const lastTwoMessages = nonSystemMessages.slice(-2);
-
-        if (systemMessage) {
-          addCacheControl(systemMessage);
-        }
-        for (const msg of lastTwoMessages) {
-          addCacheControl(msg);
-        }
-      }
+      applyOpenRouterTransforms(body);
     }
 
     return createCompletion(body, options);
   }) as typeof createCompletion;
 
   return openai;
+}
+
+/**
+ * Apply OpenRouter-specific request body mutations: opt into usage accounting,
+ * and (for Anthropic models) place `cache_control` breakpoints so the tools
+ * array, system prompt, and last two messages get cached. Exported for tests.
+ *
+ * References:
+ *   - OpenRouter prompt caching guide:
+ *     https://openrouter.ai/docs/guides/best-practices/prompt-caching#anthropic-claude
+ *   - OpenRouter tool caching announcement: "gif-prompts-omni-search-tool-caching-and-byok-flags"
+ *   - Anthropic prompt caching docs:
+ *     https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+ *
+ * Anthropic's cache hierarchy is `tools` → `system` → `messages`. We use all
+ * four breakpoints Anthropic allows per request:
+ *   1. last tool definition      (caches the entire tools array)
+ *   2. system message             (caches system prompt + AGENTS.md)
+ *   3. second-to-last non-system  (caches most of conversation)
+ *   4. last non-system            (caches everything including latest msg)
+ */
+export function applyOpenRouterTransforms(
+  body: OpenAI.Chat.Completions.ChatCompletionCreateParams,
+): void {
+  // Usage accounting field to get token usage and cost per request.
+  // https://openrouter.ai/docs/use-cases/usage-accounting
+  (body as { usage?: { include?: boolean } }).usage = { include: true };
+
+  if (!body.model.startsWith("anthropic/")) return;
+
+  // Normalize the message history to use content blocks so we can attach
+  // cache_control to individual text parts.
+  body.messages = structuredClone(body.messages);
+  body.messages = body.messages.map((m) => {
+    if (m.role !== "function" && typeof m.content === "string") {
+      return { ...m, content: [{ type: "text", text: m.content }] };
+    } else {
+      return m;
+    }
+  });
+
+  const systemMessage = body.messages.find((m) => m.role === "system");
+  const nonSystemMessages = body.messages.filter((m) => m.role !== "system");
+  const lastTwoMessages = nonSystemMessages.slice(-2);
+
+  if (systemMessage) {
+    addCacheControl(systemMessage);
+  }
+  for (const msg of lastTwoMessages) {
+    addCacheControl(msg);
+  }
+
+  // Cache the tools array by marking the last tool with cache_control.
+  // Anthropic caches everything up to and including the marked block, so
+  // marking just the last tool caches the whole array. The tools array
+  // must be byte-stable across turns for cache hits — Shakespeare builds
+  // it once per session in `ChatPane`, so this holds as long as we don't
+  // mutate session.tools mid-session.
+  //
+  // Note: the OpenAI SDK serializes the body via plain `JSON.stringify`
+  // (see node_modules/openai/internal/request-options) and does not strip
+  // unknown fields, so the `cache_control` property survives the trip to
+  // OpenRouter.
+  if (body.tools && body.tools.length > 0) {
+    body.tools = structuredClone(body.tools);
+    const lastTool = body.tools[body.tools.length - 1];
+    (lastTool as { cache_control?: { type: "ephemeral" } })
+      .cache_control = { type: "ephemeral" };
+  }
 }
 
 /** Mutate msg to add an Anthropic `cache_control` property to its last text block */
