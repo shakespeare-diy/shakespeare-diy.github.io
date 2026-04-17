@@ -142,7 +142,7 @@ export function getPreviewInjectedScript(): string {
     try {
       window.parent.postMessage({
         jsonrpc: '2.0',
-        id: ++rpcId,
+        id: rpcId(),
         method: 'updateNavigationState',
         params: {
           currentUrl: semanticPath,
@@ -259,7 +259,7 @@ export function getPreviewInjectedScript(): string {
     try {
       window.parent.postMessage({
         jsonrpc: '2.0',
-        id: ++rpcId,
+        id: rpcId(),
         method: 'console',
         params: {
           level: 'error',
@@ -279,7 +279,7 @@ export function getPreviewInjectedScript(): string {
     try {
       window.parent.postMessage({
         jsonrpc: '2.0',
-        id: ++rpcId,
+        id: rpcId(),
         method: 'console',
         params: {
           level: 'error',

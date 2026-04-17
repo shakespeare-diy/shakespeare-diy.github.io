@@ -91,6 +91,12 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('laptop');
   const [isLogsOpen, setIsLogsOpen] = useState(false);
+  // Incremented to force a full remount of the preview iframe. Using a
+  // remount (via React key) is more reliable than sending a `refresh`
+  // JSON-RPC to the nested iframe.diy frames: messages can be silently
+  // dropped if the inner iframe is mid-reload, not yet mounted, or if
+  // the outer frame's handshake is still pending. A remount always works.
+  const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframePanelRef = useRef<ImperativePanelHandle>(null);
@@ -284,8 +290,14 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
   }, [sendNavigationCommand]);
 
   const refreshIframe = useCallback(() => {
-    sendNavigationCommand('refresh');
-  }, [sendNavigationCommand]);
+    // Force a full remount of the iframe rather than sending a `refresh`
+    // JSON-RPC command. The RPC path is unreliable during rapid build
+    // cycles because the command has to traverse two iframes (outer
+    // iframe.diy frame → inner app iframe) and can be silently dropped
+    // if the inner iframe is mid-reload, not yet mounted, or the outer
+    // frame's handshake is still pending.
+    setIframeReloadKey((n) => n + 1);
+  }, []);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(prev => !prev);
@@ -709,7 +721,7 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
                           )}
                         >
                           <iframe
-                            key={projectId}
+                            key={`${projectId}:${iframeReloadKey}`}
                             ref={iframeRef}
                             src={`${previewOrigin}/`}
                             className="w-full h-full border-0"
