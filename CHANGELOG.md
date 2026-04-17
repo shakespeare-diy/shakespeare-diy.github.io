@@ -1,5 +1,13 @@
 # Changelog
 
+## [9.11.4] - 2026-04-17
+
+### Fixed
+- Preview pane no longer gets stuck on stale builds during rapid edits
+
+### Changed
+- Reduce AI costs for Anthropic models via OpenRouter by caching tool definitions across turns
+
 ## [9.11.3] - 2026-04-12
 
 ### Fixed
