@@ -726,7 +726,7 @@ export function PreviewPane({ projectId, activeTab, onToggleView, isPreviewable 
                             src={`${previewOrigin}/`}
                             className="w-full h-full border-0"
                             title="Project Preview"
-                            allow="microphone; camera; display-capture; geolocation; clipboard-read; clipboard-write; encrypted-media; fullscreen; autoplay; midi; accelerometer; gyroscope; magnetometer; payment; usb; xr-spatial-tracking"
+                            allow="microphone; camera; display-capture; geolocation; clipboard-read; clipboard-write; encrypted-media; fullscreen; autoplay; midi; accelerometer; gyroscope; magnetometer; ambient-light-sensor; payment; usb; xr-spatial-tracking"
                           />
                         </div>
                       ) : (
