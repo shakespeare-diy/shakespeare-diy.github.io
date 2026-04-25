@@ -1,5 +1,11 @@
 # Changelog
 
+## [9.12.0] - 2026-04-25
+
+### Added
+- Build support for module workers and static asset URLs — projects using `new Worker(new URL('./w.ts', import.meta.url), { type: 'module' })`, `SharedWorker`, and `new URL('./logo.svg', import.meta.url)` now build and run correctly in the preview
+- Preview pane grants microphone, ambient-light-sensor, and other device permissions so richer apps can run inside the preview
+
 ## [9.11.4] - 2026-04-17
 
 ### Fixed
