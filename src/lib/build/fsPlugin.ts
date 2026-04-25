@@ -3,6 +3,8 @@ import { join, dirname, extname } from "path-browserify";
 import type { Loader, Plugin } from "esbuild-wasm";
 import type { JSRuntimeFS } from '@/lib/JSRuntime';
 
+import { detectWorkersAndAssets, type WorkerMatch, type AssetMatch } from "./workerPlugin";
+
 interface TsConfig {
   compilerOptions?: {
     baseUrl?: string;
@@ -21,10 +23,17 @@ interface FsPluginOptions {
   cwd: string;
   tsconfig?: TsConfig;
   packageJson?: PackageJson;
+  /**
+   * Optional collectors populated when a source file contains
+   * `new Worker(new URL(...))` / `new SharedWorker(new URL(...))` /
+   * `new URL(..., import.meta.url)` patterns.
+   */
+  collectWorkers?: WorkerMatch[];
+  collectAssets?: AssetMatch[];
 }
 
 export function fsPlugin(options: FsPluginOptions): Plugin {
-  const { fs, cwd, tsconfig, packageJson } = options;
+  const { fs, cwd, tsconfig, packageJson, collectWorkers, collectAssets } = options;
   return {
     name: "fs",
 
@@ -42,74 +51,17 @@ export function fsPlugin(options: FsPluginOptions): Plugin {
           return;
         }
 
-        let resolved: string | undefined;
-        
-        // Handle absolute paths
-        if (args.path.startsWith("/")) {
-          resolved = args.path;
-        } 
-        // Handle @/ alias
-        else if (args.path.startsWith("@/")) {
-          resolved = join(cwd, "src", args.path.slice(2));
-        } 
-        // Handle relative paths
-        else if (args.importer && (args.path.startsWith("./") || args.path.startsWith("../"))) {
-          // Remove fs: prefix from importer if present
-          const importerPath = args.importer.replace(/^fs:/, '');
-          resolved = join(dirname(importerPath), args.path);
-        } 
-        // Handle bare imports (e.g., "react", "@scope/package")
-        else if (args.path.match(/^[^./]/)) {
-          // Check if this is a file: dependency
-          const packageName = args.path.startsWith("@")
-            ? args.path.split("/").slice(0, 2).join("/")
-            : args.path.split("/")[0];
-          
-          const allDeps = {
-            ...packageJson?.dependencies,
-            ...packageJson?.devDependencies,
-            ...packageJson?.peerDependencies,
-          };
-          
-          const depVersion = allDeps[packageName];
-          
-          if (depVersion && depVersion.startsWith("file:")) {
-            // Extract the file path (e.g., "file:./path" -> "./path")
-            const filePath = depVersion.slice(5); // Remove "file:" prefix
-            const packagePath = join(cwd, filePath);
-            
-            // Get the subpath within the package (e.g., "package/subdir/file" -> "/subdir/file")
-            const subpath = args.path.slice(packageName.length);
-            
-            resolved = join(packagePath, subpath);
-          } else {
-            return; // Let esmPlugin handle this
-          }
-        } 
-        // Handle tsconfig baseUrl
-        else if (args.importer && tsconfig?.compilerOptions?.baseUrl) {
-          resolved = join(cwd, tsconfig.compilerOptions.baseUrl, args.path);
-        } 
-        // Nothing matched, let other plugins handle it
-        else {
-          return;
-        }
-        
-        if (!resolved) {
-          return;
-        }
+        const resolved = await resolveFromImporter(args.path, args.importer, {
+          fs,
+          cwd,
+          tsconfig,
+          packageJson,
+        });
 
-        // Vite query parameters https://vite.dev/guide/assets
-        const [cleaned, query] = resolved.split("?");
-
-        try {
-          resolved = await tryFileVariants(fs, cleaned);
-        } catch {
-          return; // Let other plugins handle this
-        }
+        if (!resolved) return;
 
         return {
-          path: resolved + (typeof query === "string" ? "?" + query : ""),
+          path: resolved,
           namespace: "fs",
         };
       });
@@ -138,14 +90,126 @@ export function fsPlugin(options: FsPluginOptions): Plugin {
             };
           }
 
+          let contents = await fs.readFile(path, "utf8");
+
+          // Run worker/asset detection on source-code files. This only
+          // does any real work if the file contains `new URL(`; the
+          // prefilter inside `detectWorkersAndAssets` bails early
+          // otherwise.
+          if (
+            (collectWorkers || collectAssets) &&
+            ["ts", "tsx", "js", "jsx", "mjs", "cjs"].includes(ext)
+          ) {
+            const result = await detectWorkersAndAssets({
+              source: contents,
+              filePath: path,
+              ext,
+              resolveSpec: async (spec, importerPath) => {
+                const resolved = await resolveFromImporter(spec, importerPath, {
+                  fs,
+                  cwd,
+                  tsconfig,
+                  packageJson,
+                });
+                if (!resolved) return undefined;
+                // Strip any ?query that made it onto the resolved path.
+                return resolved.split("?")[0];
+              },
+            });
+            if (result.workers.length || result.assets.length) {
+              contents = result.code;
+              if (collectWorkers) collectWorkers.push(...result.workers);
+              if (collectAssets) collectAssets.push(...result.assets);
+            }
+          }
+
           return {
-            contents: await fs.readFile(path, "utf8"),
+            contents,
             loader: ext as Loader,
           };
         },
       );
     },
   };
+}
+
+interface ResolveContext {
+  fs: JSRuntimeFS;
+  cwd: string;
+  tsconfig?: TsConfig;
+  packageJson?: PackageJson;
+}
+
+/**
+ * Resolve a module specifier against an importer. This mirrors the
+ * resolution rules used by the fs plugin's onResolve handler so it
+ * can be reused by the worker/asset detection pass.
+ */
+export async function resolveFromImporter(
+  path: string,
+  importer: string | undefined,
+  ctx: ResolveContext,
+): Promise<string | undefined> {
+  const { fs, cwd, tsconfig, packageJson } = ctx;
+
+  let resolved: string | undefined;
+
+  // Handle absolute paths
+  if (path.startsWith("/")) {
+    resolved = path;
+  }
+  // Handle @/ alias
+  else if (path.startsWith("@/")) {
+    resolved = join(cwd, "src", path.slice(2));
+  }
+  // Handle relative paths
+  else if (importer && (path.startsWith("./") || path.startsWith("../"))) {
+    const importerPath = importer.replace(/^fs:/, '');
+    resolved = join(dirname(importerPath), path);
+  }
+  // Handle bare imports (e.g., "react", "@scope/package")
+  else if (path.match(/^[^./]/)) {
+    const packageName = path.startsWith("@")
+      ? path.split("/").slice(0, 2).join("/")
+      : path.split("/")[0];
+
+    const allDeps = {
+      ...packageJson?.dependencies,
+      ...packageJson?.devDependencies,
+      ...packageJson?.peerDependencies,
+    };
+
+    const depVersion = allDeps[packageName];
+
+    if (depVersion && depVersion.startsWith("file:")) {
+      const filePath = depVersion.slice(5);
+      const packagePath = join(cwd, filePath);
+      const subpath = path.slice(packageName.length);
+      resolved = join(packagePath, subpath);
+    } else {
+      return undefined;
+    }
+  }
+  // Handle tsconfig baseUrl
+  else if (importer && tsconfig?.compilerOptions?.baseUrl) {
+    resolved = join(cwd, tsconfig.compilerOptions.baseUrl, path);
+  }
+  else {
+    return undefined;
+  }
+
+  if (!resolved) return undefined;
+
+  // Vite query parameters https://vite.dev/guide/assets
+  const [cleaned, query] = resolved.split("?");
+
+  try {
+    resolved = await tryFileVariants(fs, cleaned);
+  } catch {
+    return undefined;
+  }
+
+  return resolved + (typeof query === "string" ? "?" + query : "");
 }
 
 async function tryFileVariants(
@@ -167,23 +231,23 @@ async function tryFileVariants(
       const packageJsonPath = join(basePath, "package.json");
       const packageJsonText = await fs.readFile(packageJsonPath, "utf8");
       const packageJson = JSON.parse(packageJsonText);
-      
+
       // Check for various entry point fields
       const entryPoint = packageJson.exports?.['.']
-        || packageJson.module 
-        || packageJson.main 
+        || packageJson.module
+        || packageJson.main
         || 'index.js';
-      
+
       // Resolve the entry point
-      const entryPath = typeof entryPoint === 'string' 
+      const entryPath = typeof entryPoint === 'string'
         ? join(basePath, entryPoint)
         : join(basePath, 'index.js');
-      
+
       const entryStat = await statSafe(fs, entryPath);
       if (entryStat.isFile()) {
         return entryPath;
       }
-      
+
       // Try with different extensions if the entry point doesn't exist
       for (const ext of extensions) {
         const entryWithExt = entryPath.replace(/\.[^.]+$/, '') + ext;
@@ -195,7 +259,7 @@ async function tryFileVariants(
     } catch {
       // package.json doesn't exist or is invalid, fall through to index files
     }
-    
+
     // Fall back to trying index files
     for (const ext of extensions) {
       const indexFile = join(basePath, "index" + ext);

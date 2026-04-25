@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { buildProject } from './index';
+import { buildProject, updateCSPForEsmSh } from './index';
 import { copyFiles } from '../copyFiles';
 import type { JSRuntimeFS } from '../JSRuntime';
 
@@ -593,5 +593,39 @@ react@^18.0.0:
 
     // Verify package.json was read
     expect(mockFS.readFile).toHaveBeenCalledWith('/test/project/package.json', 'utf8');
+  });
+});
+
+describe('updateCSPForEsmSh', () => {
+  const esmUrl = 'https://esm.shakespeare.diy';
+
+  it('extends the standard ESM directives with the CDN', () => {
+    const csp = "default-src 'self'; script-src 'self'; img-src 'self'";
+    const result = updateCSPForEsmSh(csp, esmUrl);
+    expect(result).toContain(`script-src 'self' ${esmUrl}`);
+    expect(result).toContain(`img-src 'self' ${esmUrl}`);
+  });
+
+  it('does NOT extend worker-src by default', () => {
+    const csp = "script-src 'self'; worker-src 'self'";
+    const result = updateCSPForEsmSh(csp, esmUrl);
+    // worker-src should remain untouched (still 'self' only).
+    expect(result).toContain("worker-src 'self'");
+    expect(result).not.toMatch(new RegExp(`worker-src[^;]*${esmUrl.replace(/[.]/g, '\\.')}`));
+  });
+
+  it('extends worker-src and child-src when emittedWorkers is true', () => {
+    const csp = "script-src 'self'";
+    const result = updateCSPForEsmSh(csp, esmUrl, { emittedWorkers: true });
+    // The directives may be seeded with 'self' if absent; what matters
+    // is that the CDN is present in each.
+    expect(result).toMatch(new RegExp(`worker-src[^;]*${esmUrl.replace(/[.]/g, '\\.')}`));
+    expect(result).toMatch(new RegExp(`child-src[^;]*${esmUrl.replace(/[.]/g, '\\.')}`));
+  });
+
+  it('extends existing worker-src directive without seeding when already present', () => {
+    const csp = "script-src 'self'; worker-src 'self' blob:";
+    const result = updateCSPForEsmSh(csp, esmUrl, { emittedWorkers: true });
+    expect(result).toMatch(new RegExp(`worker-src 'self' blob: ${esmUrl.replace(/[.]/g, '\\.')}`));
   });
 });

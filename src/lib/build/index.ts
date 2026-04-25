@@ -8,6 +8,7 @@ import { shakespearePlugin } from "./shakespearePlugin";
 import { esmPlugin } from "./esmPlugin";
 import { fsPlugin } from "./fsPlugin";
 import { convertYarnLockToPackageLock } from "./yarnLockConverter";
+import type { WorkerMatch, AssetMatch } from "./workerPlugin";
 
 import type { JSRuntimeFS } from '@/lib/JSRuntime';
 import type { Plugin } from 'esbuild-wasm';
@@ -112,6 +113,23 @@ export async function readBuildContext(
   return { packageJson, packageLock, tsconfig };
 }
 
+export interface CreatePluginsOptions {
+  /**
+   * When provided, the fs plugin will scan source files for
+   * `new Worker(new URL(..., import.meta.url))` patterns and push
+   * matches here so the caller can build them as additional entry
+   * points.
+   */
+  collectWorkers?: WorkerMatch[];
+  /**
+   * When provided, the fs plugin will scan source files for
+   * `new URL(..., import.meta.url)` patterns referencing non-source
+   * assets and push matches here so the caller can copy them into
+   * the output.
+   */
+  collectAssets?: AssetMatch[];
+}
+
 /**
  * Create the common esbuild plugins for both project and worker builds
  * Exported for use by deployment adapters that need to bundle workers
@@ -122,10 +140,18 @@ export function createPlugins(
   context: BuildContext,
   esmUrl: string,
   target?: string,
+  pluginOptions: CreatePluginsOptions = {},
 ): Plugin[] {
   return [
     shakespearePlugin({ esmUrl }),
-    fsPlugin({ fs, cwd: projectPath, tsconfig: context.tsconfig, packageJson: context.packageJson }),
+    fsPlugin({
+      fs,
+      cwd: projectPath,
+      tsconfig: context.tsconfig,
+      packageJson: context.packageJson,
+      collectWorkers: pluginOptions.collectWorkers,
+      collectAssets: pluginOptions.collectAssets,
+    }),
     esmPlugin({ packageJson: context.packageJson, packageLock: context.packageLock, target, esmUrl }),
   ];
 }
@@ -175,6 +201,9 @@ async function bundle(
     }
   }
 
+  const collectedWorkers: WorkerMatch[] = [];
+  const collectedAssets: AssetMatch[] = [];
+
   const results = await esbuild.build({
     entryPoints,
     bundle: true,
@@ -188,7 +217,10 @@ async function bundle(
     entryNames: "[name]-[hash]",
     chunkNames: "[name]-[hash]",
     assetNames: "[name]-[hash]",
-    plugins: createPlugins(fs, projectPath, context, esmUrl, target),
+    plugins: createPlugins(fs, projectPath, context, esmUrl, target, {
+      collectWorkers: collectedWorkers,
+      collectAssets: collectedAssets,
+    }),
     define: {
       "import.meta.env": JSON.stringify({}),
     },
@@ -222,12 +254,140 @@ async function bundle(
     }
   }
 
-  // Parse CSP and ensure ESM CDN is allowed for necessary directives
+  // Build each unique collected worker as its own ESM chunk, looping
+  // to pick up any nested workers / assets they themselves collect.
+  // Each iteration passes the same collector arrays so newly
+  // discovered entries feed the next iteration.
+  const placeholderToFilename = new Map<string, string>();
+  const workerQueue: WorkerMatch[] = [...collectedWorkers];
+  const seenWorkerPaths = new Set<string>();
+
+  while (workerQueue.length > 0) {
+    const nextBatch = workerQueue.splice(0, workerQueue.length);
+    for (const worker of nextBatch) {
+      if (seenWorkerPaths.has(worker.resolvedPath)) {
+        // Reuse the output from the prior build of this same worker.
+        const existing = findPlaceholderForPath(placeholderToFilename, worker.resolvedPath);
+        if (existing) {
+          placeholderToFilename.set(worker.placeholder, existing);
+        }
+        continue;
+      }
+      seenWorkerPaths.add(worker.resolvedPath);
+
+      const before = {
+        workers: collectedWorkers.length,
+        assets: collectedAssets.length,
+      };
+
+      const workerResult = await esbuild.build({
+        entryPoints: [worker.resolvedPath],
+        bundle: true,
+        write: false,
+        format: "esm",
+        target,
+        outdir: "/",
+        jsx: "automatic",
+        metafile: true,
+        sourcemap: true,
+        entryNames: "[name]-[hash]",
+        chunkNames: "[name]-[hash]",
+        assetNames: "[name]-[hash]",
+        plugins: createPlugins(fs, projectPath, context, esmUrl, target, {
+          collectWorkers: collectedWorkers,
+          collectAssets: collectedAssets,
+        }),
+        define: {
+          "import.meta.env": JSON.stringify({}),
+        },
+      });
+
+      let entryFilename: string | undefined;
+      for (const file of workerResult.outputFiles) {
+        const filename = file.path.slice(1);
+        dist[filename] = file.contents;
+        const outMeta = workerResult.metafile.outputs[filename];
+        if (outMeta?.entryPoint && !entryFilename && filename.endsWith(".js")) {
+          entryFilename = filename;
+        }
+      }
+      if (!entryFilename) {
+        // Fall back to the first .js output.
+        const firstJs = workerResult.outputFiles.find((f) => f.path.endsWith(".js"));
+        if (firstJs) entryFilename = firstJs.path.slice(1);
+      }
+      if (!entryFilename) {
+        throw new Error(`Failed to bundle worker: ${worker.resolvedPath}`);
+      }
+
+      // Record placeholder -> "./<filename>" so main-bundle rewrites
+      // produce URLs that resolve correctly against import.meta.url
+      // of the main bundle (which lives at the same origin/dir).
+      placeholderToFilename.set(worker.placeholder, "./" + entryFilename);
+      // Record the file path -> filename mapping in a secondary index
+      // via the placeholder (so the dedup branch above can find it).
+      placeholderToFilename.set(`@path:${worker.resolvedPath}`, entryFilename);
+
+      // New workers / assets discovered during this sub-build get
+      // queued.
+      if (collectedWorkers.length > before.workers) {
+        workerQueue.push(...collectedWorkers.slice(before.workers));
+      }
+    }
+  }
+
+  // Copy each unique collected asset into the output directory with
+  // a content-hashed filename.
+  const assetPathToFilename = new Map<string, string>();
+  for (const asset of collectedAssets) {
+    let outName = assetPathToFilename.get(asset.resolvedPath);
+    if (!outName) {
+      const bytes = await fs.readFile(asset.resolvedPath);
+      const data = bytes instanceof Uint8Array ? bytes : new TextEncoder().encode(String(bytes));
+      const hash = await shortContentHash(data);
+      const base = asset.resolvedPath.split("/").pop() ?? "asset";
+      const dot = base.lastIndexOf(".");
+      const stem = dot > 0 ? base.slice(0, dot) : base;
+      const ext = dot > 0 ? base.slice(dot) : "";
+      outName = `${stem}-${hash}${ext}`;
+      dist[outName] = data;
+      assetPathToFilename.set(asset.resolvedPath, outName);
+    }
+    placeholderToFilename.set(asset.placeholder, "./" + outName);
+  }
+
+  // Substitute placeholders in every JS output file.
+  if (placeholderToFilename.size > 0) {
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    for (const [filename, contents] of Object.entries(dist)) {
+      if (!filename.endsWith(".js")) continue;
+      let text = decoder.decode(contents);
+      let changed = false;
+      for (const [placeholder, replacement] of placeholderToFilename) {
+        if (placeholder.startsWith("@path:")) continue;
+        if (text.includes(placeholder)) {
+          text = text.split(placeholder).join(replacement.startsWith("./") ? replacement.slice(2) : replacement);
+          changed = true;
+        }
+      }
+      if (changed) {
+        dist[filename] = encoder.encode(text);
+      }
+    }
+  }
+
+  // Parse CSP and ensure ESM CDN is allowed for necessary directives.
+  // If any workers were emitted, also extend worker-src / child-src so
+  // the browser permits module workers and workers importing from the
+  // ESM CDN.
   const cspMeta = doc.querySelector("meta[http-equiv=\"content-security-policy\"]");
   if (cspMeta) {
     const cspContent = cspMeta.getAttribute("content");
     if (cspContent) {
-      const updatedCSP = updateCSPForEsmSh(cspContent, esmUrl);
+      const updatedCSP = updateCSPForEsmSh(cspContent, esmUrl, {
+        emittedWorkers: collectedWorkers.length > 0,
+      });
       cspMeta.setAttribute("content", updatedCSP);
     }
   }
@@ -236,6 +396,42 @@ async function bundle(
   dist["index.html"] = new TextEncoder().encode(updatedHtml);
 
   return dist;
+}
+
+function findPlaceholderForPath(
+  placeholderToFilename: Map<string, string>,
+  resolvedPath: string,
+): string | undefined {
+  const key = `@path:${resolvedPath}`;
+  const filename = placeholderToFilename.get(key);
+  return filename ? "./" + filename : undefined;
+}
+
+async function shortContentHash(data: Uint8Array): Promise<string> {
+  // Use SubtleCrypto if available (browsers, modern Node via webcrypto
+  // global); fall back to a simple non-cryptographic hash for test
+  // environments that stub out crypto.
+  try {
+    const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
+    if (subtle?.digest) {
+      const buf = await subtle.digest("SHA-256", data);
+      const bytes = new Uint8Array(buf);
+      let hex = "";
+      for (let i = 0; i < 8; i++) {
+        hex += bytes[i].toString(16).padStart(2, "0");
+      }
+      return hex;
+    }
+  } catch {
+    // fall through
+  }
+  // FNV-1a-ish fallback (good enough for filename uniqueness).
+  let h = 0x811c9dc5;
+  for (let i = 0; i < data.length; i++) {
+    h ^= data[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
 }
 
 /**
@@ -328,15 +524,42 @@ async function fileExists(fs: JSRuntimeFS, path: string): Promise<boolean> {
 }
 
 /** Updates CSP to allow ESM CDN for scripts, assets, fonts, and CSS */
-export function updateCSPForEsmSh(csp: string, esmUrl: string): string {
+export function updateCSPForEsmSh(
+  csp: string,
+  esmUrl: string,
+  options: { emittedWorkers?: boolean } = {},
+): string {
   const esmDirectives = [
     'script-src',     // For JavaScript modules
     'img-src',        // For images
     'media-src',      // For video/audio
     'font-src',       // For fonts
     'style-src',      // For CSS
-    'connect-src'     // For fetch/XHR requests to ESM CDN
+    'connect-src',    // For fetch/XHR requests to ESM CDN
   ];
 
-  return addDomainToCSP(csp, esmUrl, esmDirectives);
+  let updated = addDomainToCSP(csp, esmUrl, esmDirectives);
+
+  if (options.emittedWorkers) {
+    // Module workers load from the same origin; when they import from
+    // the ESM CDN, worker-src (and child-src for older browsers) must
+    // list the CDN as well. These directives may not exist in the
+    // project's CSP, so seed them before extending.
+    updated = ensureDirective(updated, 'worker-src');
+    updated = ensureDirective(updated, 'child-src');
+    updated = addDomainToCSP(updated, esmUrl, ['worker-src', 'child-src']);
+  }
+
+  return updated;
+}
+
+/**
+ * Ensure a CSP directive exists. If absent, seed it with `'self'` so
+ * subsequent `addDomainToCSP` calls have something to extend.
+ */
+function ensureDirective(csp: string, directive: string): string {
+  const re = new RegExp(`(^|;)\\s*${directive}\\s`);
+  if (re.test(csp)) return csp;
+  const trimmed = csp.trim().replace(/;\s*$/, '');
+  return trimmed ? `${trimmed}; ${directive} 'self'` : `${directive} 'self'`;
 }

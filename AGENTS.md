@@ -77,6 +77,41 @@ AI filesystem access through tools (including shell commands via ShellTool) has 
 - **Write operations**: Restricted to current project directory and `/tmp/` directory (including subdirectories)
 - **Copy operations**: Can copy from any absolute path to relative paths or `/tmp/`, but cannot copy from relative to absolute paths outside allowed areas
 
+#### Web Workers and Asset URLs
+
+Shakespeare's esbuild-wasm build pipeline supports the Vite/webpack-compatible patterns for loading Web Workers and static assets:
+
+```ts
+// Module Worker (required: { type: 'module' })
+const worker = new Worker(
+  new URL('./worker.ts', import.meta.url),
+  { type: 'module' },
+);
+
+// SharedWorker, same pattern
+const shared = new SharedWorker(
+  new URL('./shared.ts', import.meta.url),
+  { type: 'module' },
+);
+
+// Static asset URL (images, wasm, fonts, audio, etc.)
+const logoUrl = new URL('./logo.svg', import.meta.url);
+```
+
+**Supported:**
+- `new Worker(new URL('<spec>', import.meta.url), { type: 'module' })`
+- `new SharedWorker(new URL('<spec>', import.meta.url), { type: 'module' })`
+- `new URL('<spec>', import.meta.url)` where `<spec>` resolves to a non-source file (images, wasm, audio, fonts, etc.)
+- Relative (`./`, `../`), absolute (`/`), and alias (`@/`) specifiers
+- String literals with any quote style, including backticks without interpolation
+
+**Not supported (will emit a build error):**
+- Classic (non-module) workers — `{ type: 'module' }` is required
+- Dynamic specifiers — the first argument to `new URL()` must be a string literal
+- `new URL(..., import.meta.url)` pointing at source files (`.ts/.tsx/.js/.jsx/.mjs/.cjs/.css`); use a regular import or the Worker pattern instead (emits a console warning, then leaves the expression untouched)
+
+Workers are bundled as separate ESM chunks and can import from npm packages normally — the same ESM-CDN rewrites applied to the main bundle apply to workers. When any workers are emitted, the build also extends the output CSP's `worker-src` and `child-src` directives to permit loading the ESM CDN from within workers.
+
 ### Git Integration with isomorphic-git
 
 Shakespeare provides full Git functionality in the browser using `isomorphic-git` and `@isomorphic-git/lightning-fs`, with all data persisted in IndexedDB.

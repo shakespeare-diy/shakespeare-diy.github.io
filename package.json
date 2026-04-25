@@ -70,6 +70,8 @@
     "@tanstack/react-query": "^5.56.2",
     "@unhead/addons": "^2.0.10",
     "@unhead/react": "^2.0.10",
+    "acorn": "^8.16.0",
+    "acorn-jsx": "^5.3.2",
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
