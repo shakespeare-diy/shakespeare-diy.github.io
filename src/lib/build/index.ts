@@ -52,6 +52,37 @@ export interface BuildContext {
   tsconfig?: TsConfig;
 }
 
+/** Tailwind CSS variant used by a project (or `null` if Tailwind is not enabled). */
+export type TailwindVariant = "v3" | "v4" | null;
+
+/**
+ * Detect which major version of Tailwind CSS a project uses by inspecting the
+ * `tailwindcss` entry in package.json (dependencies, devDependencies, or
+ * peerDependencies). Returns `null` when no Tailwind dependency is declared.
+ *
+ * The version string is matched loosely: any leading non-digit characters
+ * (such as `^`, `~`, `>=`, or `v`) are stripped before reading the major
+ * number. Ranges like `>=3.0.0 <5.0.0`, git URLs, or other non-standard
+ * specifiers fall through to `null`, which callers should treat as "skip
+ * Tailwind injection entirely".
+ */
+export function detectTailwindVariant(packageJson: PackageJson): TailwindVariant {
+  const spec =
+    packageJson.dependencies?.tailwindcss ??
+    packageJson.devDependencies?.tailwindcss ??
+    packageJson.peerDependencies?.tailwindcss;
+
+  if (!spec) return null;
+
+  const match = spec.match(/(\d+)/);
+  if (!match) return null;
+
+  const major = Number(match[1]);
+  if (major >= 4) return "v4";
+  if (major === 3) return "v3";
+  return null;
+}
+
 /**
  * Read package.json, package-lock.json/yarn.lock, and tsconfig.json from project
  * Exported for use by deployment adapters that need to bundle workers
@@ -193,12 +224,22 @@ async function bundle(
     }
   }
 
-  // Enable Tailwind CSS if a config file is present
-  for (const path of ["tailwind.config.ts", "tailwind.config.js"]) {
-    if (await fileExists(fs, join(projectPath, path))) {
-      entryPoints.push(`shakespeare:${path}`);
-      break;
+  // Enable Tailwind CSS based on the version declared in package.json.
+  // v3 needs a synthetic entry that loads the Play CDN runtime and assigns
+  // the project's tailwind.config.{js,ts} to `window.tailwind.config`.
+  // v4 has no JS config (theming is CSS-based via `@theme`) and the
+  // `@tailwindcss/browser@4` runtime auto-scans the document, so the shim
+  // just needs to side-effect-import the runtime.
+  const tailwindVariant = detectTailwindVariant(context.packageJson);
+  if (tailwindVariant === "v3") {
+    for (const path of ["tailwind.config.ts", "tailwind.config.js"]) {
+      if (await fileExists(fs, join(projectPath, path))) {
+        entryPoints.push(`shakespeare:${path}`);
+        break;
+      }
     }
+  } else if (tailwindVariant === "v4") {
+    entryPoints.push("shakespeare:tailwindcss@4");
   }
 
   const collectedWorkers: WorkerMatch[] = [];

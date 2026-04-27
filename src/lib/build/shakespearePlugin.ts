@@ -14,7 +14,9 @@ export function shakespearePlugin(options: ShakespearePluginOptions): Plugin {
     name: "shakespeare",
 
     setup(build) {
-      // Handle Tailwind CSS configuration files
+      // Handle Tailwind CSS configuration files (v3).
+      // The synthetic entry loads the v3 Play CDN runtime and assigns the
+      // project's tailwind.config.{js,ts} to the global `tailwind.config`.
       build.onResolve({ filter: /^shakespeare:tailwind\.config\.(js|ts)$/ }, (args) => {
         return {
           path: args.path,
@@ -30,6 +32,24 @@ export function shakespearePlugin(options: ShakespearePluginOptions): Plugin {
             import "${options.esmUrl}/tailwindcss-cdn@3";
             tailwind.config = tailwindConfig;
           `,
+          loader: "js",
+        };
+      });
+
+      // Handle Tailwind CSS v4 runtime.
+      // v4 has no JS config (theming is done in CSS via `@theme`) and the
+      // `@tailwindcss/browser@4` runtime auto-detects `<style type="text/tailwindcss">`
+      // blocks in the document, so the shim just side-effect-imports the runtime.
+      build.onResolve({ filter: /^shakespeare:tailwindcss@4$/ }, (args) => {
+        return {
+          path: args.path,
+          namespace: "shakespeare-tailwind-v4",
+        };
+      });
+
+      build.onLoad({ filter: /.*/, namespace: "shakespeare-tailwind-v4" }, () => {
+        return {
+          contents: `import "${options.esmUrl}/@tailwindcss/browser@4";`,
           loader: "js",
         };
       });
