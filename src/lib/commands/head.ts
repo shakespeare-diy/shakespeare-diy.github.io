@@ -1,16 +1,28 @@
-import { join } from "path-browserify";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand, ShellCommandResult } from "./ShellCommand";
 import { createSuccessResult, createErrorResult } from "./ShellCommand";
+import { classifyFsError, parseOptions, resolvePath } from "./utils";
 
 /**
- * Implementation of the 'head' command
- * Display the first lines of files
+ * Implementation of the 'head' command.
+ *
+ * Supported options:
+ *   -n NUM, --lines=NUM   Print first NUM lines (default 10)
+ *                         NUM may be prefixed with '-' (already implicit),
+ *                         or with '+' to print all but the last NUM lines
+ *                         when combined with a negative interpretation —
+ *                         for head, POSIX: `-n -K` means all but last K.
+ *   -c NUM, --bytes=NUM   Print first NUM bytes
+ *   -q, --quiet, --silent Suppress headers when multiple files
+ *   -v, --verbose         Always print headers
+ *   -NUM                  Shorthand for -n NUM (e.g. `head -5 file`)
+ *   --                    End of options
+ *   -                     Read from stdin
  */
 export class HeadCommand implements ShellCommand {
   name = 'head';
   description = 'Display the first lines of files';
-  usage = 'head [-n lines] [file...]';
+  usage = 'head [-n NUM] [-c NUM] [-qv] [--] [file...]';
 
   private fs: JSRuntimeFS;
 
@@ -19,116 +31,122 @@ export class HeadCommand implements ShellCommand {
   }
 
   async execute(args: string[], cwd: string, input?: string): Promise<ShellCommandResult> {
-    const { options, files } = this.parseArgs(args);
+    const parsed = parseOptions(args, {
+      booleanShort: ['q', 'v'],
+      valueShort: ['n', 'c'],
+      booleanLong: ['quiet', 'silent', 'verbose'],
+      valueLong: ['lines', 'bytes'],
+      longToShort: {
+        quiet: 'q', silent: 'q', verbose: 'v',
+        lines: 'n', bytes: 'c',
+      },
+    }, { enableNumericShortcut: true });
 
-    // If input is provided (from pipe), process that input
-    if (input !== undefined) {
-      const lines = input.split('\n');
-      const selectedLines = lines.slice(0, options.lines);
-      const result = selectedLines.join('\n');
-      return createSuccessResult(result + (result && !result.endsWith('\n') ? '\n' : ''));
+    if (parsed.unknown.length > 0) {
+      return createErrorResult(`${this.name}: invalid option -- '${parsed.unknown[0].replace(/^-+/, '')}'`);
     }
 
-    const targetFiles = files.length > 0 ? files : ['-']; // stdin if no files
+    const linesArg = parsed.values.get('n');
+    const bytesArg = parsed.values.get('c');
 
-    try {
-      const outputs: string[] = [];
-
-      for (const filePath of targetFiles) {
-        try {
-          if (filePath === '-') {
-            return createErrorResult(`${this.name}: reading from stdin is not supported`);
-          }
-
-          // Handle absolute paths
-          if (filePath.startsWith('/') || filePath.startsWith('\\') || /^[A-Za-z]:[\\/]/.test(filePath)) {
-            return createErrorResult(`${this.name}: absolute paths are not supported: ${filePath}`);
-          }
-
-          const absolutePath = join(cwd, filePath);
-
-          // Check if path exists and is a file
-          const stats = await this.fs.stat(absolutePath);
-
-          if (stats.isDirectory()) {
-            return createErrorResult(`${this.name}: ${filePath}: Is a directory`);
-          }
-
-          // Read file content
-          const content = await this.fs.readFile(absolutePath, 'utf8');
-          const lines = content.split('\n');
-
-          // Take first n lines (but don't add extra newline if file doesn't end with one)
-          const selectedLines = lines.slice(0, options.lines);
-
-          // If we're showing multiple files, add a header
-          if (targetFiles.length > 1) {
-            outputs.push(`==> ${filePath} <==`);
-          }
-
-          // Join lines and preserve original line endings
-          const result = selectedLines.join('\n');
-          outputs.push(result);
-
-          // Add separator between files (except for last file)
-          if (targetFiles.length > 1 && filePath !== targetFiles[targetFiles.length - 1]) {
-            outputs.push('');
-          }
-
-        } catch (error) {
-          if (error instanceof Error) {
-            if (error.message.includes('ENOENT') || error.message.includes('not found')) {
-              return createErrorResult(`${this.name}: ${filePath}: No such file or directory`);
-            } else if (error.message.includes('EACCES') || error.message.includes('permission')) {
-              return createErrorResult(`${this.name}: ${filePath}: Permission denied`);
-            } else {
-              return createErrorResult(`${this.name}: ${filePath}: ${error.message}`);
-            }
-          } else {
-            return createErrorResult(`${this.name}: ${filePath}: Unknown error`);
-          }
-        }
-      }
-
-      return createSuccessResult(outputs.join('\n') + (outputs.length > 0 ? '\n' : ''));
-
-    } catch (error) {
-      return createErrorResult(`${this.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    let lines = 10;
+    let linesNegative = false;
+    if (linesArg !== undefined) {
+      const n = parseIntStrict(linesArg);
+      if (n === undefined) return createErrorResult(`${this.name}: invalid number of lines: '${linesArg}'`);
+      if (n < 0) { lines = -n; linesNegative = true; }
+      else lines = n;
     }
-  }
 
-  private parseArgs(args: string[]): { options: { lines: number }; files: string[] } {
-    const options = { lines: 10 }; // Default to 10 lines
-    const files: string[] = [];
-    let i = 0;
+    let bytes: number | undefined;
+    let bytesNegative = false;
+    if (bytesArg !== undefined) {
+      const n = parseIntStrict(bytesArg);
+      if (n === undefined) return createErrorResult(`${this.name}: invalid number of bytes: '${bytesArg}'`);
+      if (n < 0) { bytes = -n; bytesNegative = true; }
+      else bytes = n;
+    }
 
-    while (i < args.length) {
-      const arg = args[i];
+    const quiet = parsed.flags.has('q');
+    const verbose = parsed.flags.has('v');
 
-      if (arg === '-n') {
-        // Next argument should be the number of lines
-        i++;
-        if (i < args.length) {
-          const lineCount = parseInt(args[i], 10);
-          if (!isNaN(lineCount) && lineCount > 0) {
-            options.lines = lineCount;
-          }
-        }
-      } else if (arg.startsWith('-n')) {
-        // -n10 format
-        const lineCount = parseInt(arg.slice(2), 10);
-        if (!isNaN(lineCount) && lineCount > 0) {
-          options.lines = lineCount;
-        }
-      } else if (arg.startsWith('-') && arg !== '-') {
-        // Other options (ignore for now)
+    const files = parsed.operands.length > 0 ? parsed.operands : ['-'];
+    const outputs: string[] = [];
+    const showHeaders = verbose || (!quiet && files.length > 1);
+
+    for (let idx = 0; idx < files.length; idx++) {
+      const filePath = files[idx];
+      let content: string;
+
+      if (filePath === '-') {
+        content = input ?? '';
       } else {
-        files.push(arg);
+        try {
+          const absolutePath = resolvePath(filePath, cwd);
+          const stats = await this.fs.stat(absolutePath);
+          if (stats.isDirectory()) {
+            return createErrorResult(`${this.name}: error reading '${filePath}': Is a directory`);
+          }
+          content = await this.fs.readFile(absolutePath, 'utf8');
+        } catch (error) {
+          const { kind } = classifyFsError(error);
+          if (kind === 'ENOENT') {
+            return createErrorResult(`${this.name}: cannot open '${filePath}' for reading: No such file or directory`);
+          }
+          if (kind === 'EACCES') {
+            return createErrorResult(`${this.name}: cannot open '${filePath}' for reading: Permission denied`);
+          }
+          return createErrorResult(`${this.name}: ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }
 
-      i++;
+      if (showHeaders) {
+        if (idx > 0) outputs.push('');
+        outputs.push(`==> ${filePath} <==`);
+      }
+
+      if (bytes !== undefined) {
+        const sliced = bytesNegative
+          ? content.slice(0, Math.max(0, content.length - bytes))
+          : content.slice(0, bytes);
+        outputs.push(sliced);
+      } else {
+        const allLines = content.split('\n');
+        // Split typically produces one extra empty trailing element when the
+        // file ends with a newline; we preserve logical line count.
+        const logical = content.endsWith('\n') ? allLines.slice(0, -1) : allLines;
+        const count = linesNegative
+          ? Math.max(0, logical.length - lines)
+          : Math.min(lines, logical.length);
+        const selected = logical.slice(0, count);
+        outputs.push(selected.join('\n') + (selected.length > 0 ? '\n' : ''));
+      }
     }
 
-    return { options, files };
+    // Concatenate; the per-chunk trailing newlines ensure correct joining.
+    return createSuccessResult(normalizeOutput(outputs));
   }
+}
+
+function parseIntStrict(s: string): number | undefined {
+  // Accept forms: "10", "-10", "+10"
+  if (!/^[-+]?\d+$/.test(s)) return undefined;
+  return parseInt(s, 10);
+}
+
+function normalizeOutput(chunks: string[]): string {
+  // Join chunks with newlines only when a header/empty divider exists
+  let out = '';
+  for (let i = 0; i < chunks.length; i++) {
+    const c = chunks[i];
+    if (c === '' && i > 0) {
+      // Blank line between file headers.
+      if (!out.endsWith('\n')) out += '\n';
+      out += '\n';
+      continue;
+    }
+    if (i > 0 && !out.endsWith('\n')) out += '\n';
+    out += c;
+  }
+  return out;
 }

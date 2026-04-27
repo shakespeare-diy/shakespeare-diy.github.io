@@ -40,7 +40,7 @@ describe('GrepCommand', () => {
   it('should have correct name and description', () => {
     expect(command.name).toBe('grep');
     expect(command.description).toBe('Search for patterns in files');
-    expect(command.usage).toBe('grep [-i] [-n] [-r] pattern [file...]');
+    expect(command.usage).toBe('grep [-EFGivwxclLnHhoqrRs] [-A NUM] [-B NUM] [-C NUM] [-e PATTERN] [-f FILE] [--include GLOB] [--exclude GLOB] [--] PATTERN [file...]');
   });
 
   it('should search for pattern in file', async () => {
@@ -95,17 +95,59 @@ describe('GrepCommand', () => {
     expect(result.stderr).toContain('missing pattern');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await command.execute(['pattern', '/absolute/path'], '/project');
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should support absolute paths', async () => {
+    const result = await command.execute(['test', '/project/test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('This is a test');
   });
 
-  it('should reject stdin', async () => {
-    const result = await command.execute(['pattern', '-'], '/project');
+  it('should read from stdin via -', async () => {
+    const result = await command.execute(['foo', '-'], '/project', 'foo\nbar\nfoobar\n');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('foo');
+    expect(result.stdout).toContain('foobar');
+  });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('reading from stdin is not supported');
+  it('should support -v to invert match', async () => {
+    const result = await command.execute(['-v', 'test', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Hello World');
+    expect(result.stdout).not.toContain('This is a test');
+  });
+
+  it('should support -c to count matches', async () => {
+    const result = await command.execute(['-c', 'test', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe('2');
+  });
+
+  it('should support -l to list files with matches', async () => {
+    const result = await command.execute(['-l', 'test', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe('test.txt');
+  });
+
+  it('should support -o to only show matches', async () => {
+    const result = await command.execute(['-o', 'test', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('test');
+  });
+
+  it('should support -q for quiet mode', async () => {
+    const result = await command.execute(['-q', 'test', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('');
+  });
+
+  it('should support -F for fixed strings', async () => {
+    const result = await command.execute(['-F', 'World', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Hello World');
+  });
+
+  it('should support -w for word match', async () => {
+    const result = await command.execute(['-w', 'test', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('This is a test');
   });
 });

@@ -30,15 +30,15 @@ describe('CatCommand', () => {
   it('should have correct command properties', () => {
     expect(catCommand.name).toBe('cat');
     expect(catCommand.description).toBe('Concatenate and display file contents');
-    expect(catCommand.usage).toBe('cat [file...]');
+    expect(catCommand.usage).toBe('cat [-nbsETAvu] [--] [file...]');
   });
 
-  it('should return error when no arguments provided', async () => {
+  it('should return empty output when no arguments and no stdin', async () => {
     const result = await catCommand.execute([], testCwd);
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('missing file operand');
+    expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
   });
 
   it('should read and return file content', async () => {

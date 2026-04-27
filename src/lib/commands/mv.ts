@@ -2,16 +2,27 @@ import { join, dirname, basename } from "path-browserify";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand, ShellCommandResult } from "./ShellCommand";
 import { createSuccessResult, createErrorResult } from "./ShellCommand";
-import { isAbsolutePath, validateWritePath } from "../security";
+import { validateWritePath } from "../security";
+import { classifyFsError, parseOptions, resolvePath } from "./utils";
 
 /**
- * Implementation of the 'mv' command
- * Move/rename files and directories
+ * Implementation of the 'mv' command.
+ *
+ * Moves/renames files or directories. By default, existing destinations
+ * are overwritten (POSIX-compliant).
+ *
+ * Supported options:
+ *   -f, --force           Force overwrite (default behavior; here mostly to silence -i)
+ *   -i, --interactive     Prompt before overwrite (no-op: treat as silent overwrite)
+ *   -n, --no-clobber      Do not overwrite an existing file
+ *   -v, --verbose         Explain what is being done
+ *   -T, --no-target-directory  Treat destination as a regular file
+ *   --                    End of options
  */
 export class MvCommand implements ShellCommand {
   name = 'mv';
   description = 'Move/rename files and directories';
-  usage = 'mv source... destination';
+  usage = 'mv [-finvT] [--] source... destination';
 
   private fs: JSRuntimeFS;
 
@@ -20,108 +31,121 @@ export class MvCommand implements ShellCommand {
   }
 
   async execute(args: string[], cwd: string, _input?: string): Promise<ShellCommandResult> {
-    if (args.length < 2) {
+    const parsed = parseOptions(args, {
+      booleanShort: ['f', 'i', 'n', 'v', 'T'],
+      booleanLong: ['force', 'interactive', 'no-clobber', 'verbose', 'no-target-directory'],
+      longToShort: {
+        force: 'f',
+        interactive: 'i',
+        'no-clobber': 'n',
+        verbose: 'v',
+        'no-target-directory': 'T',
+      },
+    });
+
+    if (parsed.unknown.length > 0) {
+      return createErrorResult(`${this.name}: invalid option -- '${parsed.unknown[0].replace(/^-+/, '')}'`);
+    }
+
+    const opts = {
+      noClobber: parsed.flags.has('n'),
+      verbose: parsed.flags.has('v'),
+      noTargetDir: parsed.flags.has('T'),
+    };
+
+    const paths = parsed.operands;
+    if (paths.length < 2) {
       return createErrorResult(`${this.name}: missing file operand\nUsage: ${this.usage}`);
     }
 
-    try {
-      const sources = args.slice(0, -1);
-      const destination = args[args.length - 1];
+    const sources = paths.slice(0, -1);
+    const destination = paths[paths.length - 1];
 
-      // Check write permissions for destination and sources (since mv deletes the source)
-      const pathsToValidate = [destination, ...sources];
-      for (const path of pathsToValidate) {
-        try {
-          validateWritePath(path, this.name, cwd);
-        } catch (error) {
-          return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
-        }
-      }
-
-      // Handle both absolute and relative paths for destination
-      let destAbsolutePath: string;
-      if (isAbsolutePath(destination)) {
-        destAbsolutePath = destination;
-      } else {
-        destAbsolutePath = join(cwd, destination);
-      }
-
-      // Check if destination exists and is a directory
-      let destIsDir = false;
+    const pathsToValidate = [destination, ...sources];
+    for (const path of pathsToValidate) {
       try {
-        const destStats = await this.fs.stat(destAbsolutePath);
-        destIsDir = destStats.isDirectory();
-      } catch {
-        // Destination doesn't exist, that's fine for single file moves
+        validateWritePath(path, this.name, cwd);
+      } catch (error) {
+        return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
       }
+    }
 
-      // If multiple sources, destination must be a directory
-      if (sources.length > 1 && !destIsDir) {
-        return createErrorResult(`${this.name}: target '${destination}' is not a directory`);
-      }
+    const destAbsolutePath = resolvePath(destination, cwd);
 
-      for (const source of sources) {
+    let destIsDir = false;
+    try {
+      const destStats = await this.fs.stat(destAbsolutePath);
+      destIsDir = destStats.isDirectory();
+    } catch {
+      // Destination doesn't exist.
+    }
+    if (opts.noTargetDir) destIsDir = false;
+
+    if (sources.length > 1 && !destIsDir) {
+      return createErrorResult(`${this.name}: target '${destination}' is not a directory`);
+    }
+
+    const verboseOut: string[] = [];
+
+    for (const source of sources) {
+      try {
+        const sourceAbsolutePath = resolvePath(source, cwd);
+        await this.fs.stat(sourceAbsolutePath);
+
+        const targetPath = destIsDir
+          ? join(destAbsolutePath, basename(source))
+          : destAbsolutePath;
+
+        // Existence / no-clobber check.
+        let targetExists = false;
         try {
-          // Handle both absolute and relative paths for source
-          let sourceAbsolutePath: string;
-          if (isAbsolutePath(source)) {
-            sourceAbsolutePath = source;
-          } else {
-            sourceAbsolutePath = join(cwd, source);
-          }
+          await this.fs.stat(targetPath);
+          targetExists = true;
+        } catch {
+          // Doesn't exist.
+        }
 
-          // Check if source exists
-          await this.fs.stat(sourceAbsolutePath);
+        if (targetExists && opts.noClobber) {
+          continue;
+        }
 
-          let targetPath: string;
-          if (destIsDir) {
-            // Move into directory
-            targetPath = join(destAbsolutePath, basename(source));
-          } else {
-            // Move/rename to specific path
-            targetPath = destAbsolutePath;
-          }
+        // Ensure parent dir exists (POSIX mv errors here; we keep legacy permissive).
+        const targetDir = dirname(targetPath);
+        try {
+          await this.fs.stat(targetDir);
+        } catch {
+          await this.fs.mkdir(targetDir, { recursive: true });
+        }
 
-          // Check if target already exists
+        if (targetExists) {
+          // Remove existing target so rename succeeds (some VFSes don't
+          // support atomic rename-over-existing).
           try {
-            await this.fs.stat(targetPath);
-            // Target exists - in real mv, this would overwrite, but let's be safe
-            return createErrorResult(`${this.name}: cannot move '${source}' to '${destination}': File exists`);
-          } catch {
-            // Target doesn't exist, good to proceed
-          }
-
-          // Ensure target directory exists
-          const targetDir = dirname(targetPath);
-          try {
-            await this.fs.stat(targetDir);
-          } catch {
-            await this.fs.mkdir(targetDir, { recursive: true });
-          }
-
-          // Perform the move (rename)
-          await this.fs.rename(sourceAbsolutePath, targetPath);
-
-        } catch (error) {
-          if (error instanceof Error) {
-            if (error.message.includes('ENOENT') || error.message.includes('not found')) {
-              return createErrorResult(`${this.name}: cannot stat '${source}': No such file or directory`);
-            } else if (error.message.includes('EACCES') || error.message.includes('permission')) {
-              return createErrorResult(`${this.name}: cannot move '${source}': Permission denied`);
+            const ts = await this.fs.stat(targetPath);
+            if (ts.isDirectory()) {
+              await this.fs.rmdir(targetPath);
             } else {
-              return createErrorResult(`${this.name}: cannot move '${source}': ${error.message}`);
+              await this.fs.unlink(targetPath);
             }
-          } else {
-            return createErrorResult(`${this.name}: cannot move '${source}': Unknown error`);
+          } catch {
+            // Best-effort; the rename may still work.
           }
         }
+
+        await this.fs.rename(sourceAbsolutePath, targetPath);
+        if (opts.verbose) verboseOut.push(`renamed '${source}' -> '${targetPath}'`);
+      } catch (error) {
+        const { kind, message } = classifyFsError(error);
+        if (kind === 'ENOENT') {
+          return createErrorResult(`${this.name}: cannot stat '${source}': No such file or directory`);
+        }
+        if (kind === 'EACCES') {
+          return createErrorResult(`${this.name}: cannot move '${source}': Permission denied`);
+        }
+        return createErrorResult(`${this.name}: cannot move '${source}': ${message}`);
       }
-
-      return createSuccessResult('');
-
-    } catch (error) {
-      return createErrorResult(`${this.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+    return createSuccessResult(verboseOut.length > 0 ? verboseOut.join('\n') + '\n' : '');
   }
 }
-

@@ -1,17 +1,25 @@
-import { join } from "path-browserify";
+import { join, basename } from "path-browserify";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand, ShellCommandResult } from "./ShellCommand";
 import { createSuccessResult, createErrorResult } from "./ShellCommand";
-import { isAbsolutePath, validateWritePath } from "../security";
+import { validateWritePath } from "../security";
+import { classifyFsError, parseOptions, resolvePath } from "./utils";
 
 /**
- * Implementation of the 'rm' command
- * Remove files and directories
+ * Implementation of the 'rm' command.
+ *
+ * Supported options:
+ *   -r, -R, --recursive  Remove directories and their contents recursively
+ *   -f, --force          Ignore nonexistent files and suppress prompts
+ *   -d, --dir            Remove empty directories
+ *   -v, --verbose        Explain what is being done
+ *   -i                   Prompt before every removal (no-op in non-interactive)
+ *   --                   End of options
  */
 export class RmCommand implements ShellCommand {
   name = 'rm';
   description = 'Remove files and directories';
-  usage = 'rm [-rf] file...';
+  usage = 'rm [-rRfdvi] [--] file...';
 
   private fs: JSRuntimeFS;
 
@@ -20,140 +28,114 @@ export class RmCommand implements ShellCommand {
   }
 
   async execute(args: string[], cwd: string, _input?: string): Promise<ShellCommandResult> {
-    if (args.length === 0) {
+    const parsed = parseOptions(args, {
+      booleanShort: ['r', 'R', 'f', 'd', 'v', 'i'],
+      booleanLong: ['recursive', 'force', 'dir', 'verbose'],
+      longToShort: {
+        recursive: 'r',
+        force: 'f',
+        dir: 'd',
+        verbose: 'v',
+      },
+      shortAliases: { R: 'r' },
+    });
+
+    if (parsed.unknown.length > 0) {
+      return createErrorResult(`${this.name}: invalid option -- '${parsed.unknown[0].replace(/^-+/, '')}'`);
+    }
+
+    const opts = {
+      recursive: parsed.flags.has('r'),
+      force: parsed.flags.has('f'),
+      allowEmptyDir: parsed.flags.has('d'),
+      verbose: parsed.flags.has('v'),
+    };
+
+    const paths = parsed.operands;
+    if (paths.length === 0) {
+      if (opts.force) return createSuccessResult('');
       return createErrorResult(`${this.name}: missing operand\nUsage: ${this.usage}`);
     }
 
-    try {
-      const { options, paths } = this.parseArgs(args);
+    const verboseOut: string[] = [];
+    const errors: string[] = [];
 
-      if (paths.length === 0) {
-        return createErrorResult(`${this.name}: missing operand\nUsage: ${this.usage}`);
+    for (const path of paths) {
+      // Refuse to remove . or ..
+      const b = basename(path);
+      if (b === '.' || b === '..') {
+        if (!opts.force) {
+          errors.push(`${this.name}: refusing to remove '.' or '..' directory: skipping '${path}'`);
+        }
+        continue;
       }
 
-      for (const path of paths) {
-        try {
-          // Check for special cases first
-          if (path === '.' || path === '..') {
-            return createErrorResult(`${this.name}: cannot remove '${path}': Invalid argument`);
-          }
+      try {
+        validateWritePath(path, this.name, cwd);
+      } catch (error) {
+        if (!opts.force) {
+          errors.push(error instanceof Error ? error.message : 'Unknown error');
+        }
+        continue;
+      }
 
-          // Validate write permissions for absolute paths
-          try {
-            validateWritePath(path, this.name, cwd);
-          } catch (error) {
-            return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
-          }
+      const absolutePath = resolvePath(path, cwd);
 
-          // Handle both absolute and relative paths
-          let absolutePath: string;
-          if (isAbsolutePath(path)) {
-            absolutePath = path;
+      try {
+        const stats = await this.fs.stat(absolutePath);
+
+        if (stats.isDirectory()) {
+          if (opts.recursive) {
+            await this.removeDirectoryRecursive(absolutePath, verboseOut, opts.verbose);
+            if (opts.verbose) verboseOut.push(`removed directory '${path}'`);
+          } else if (opts.allowEmptyDir) {
+            await this.fs.rmdir(absolutePath);
+            if (opts.verbose) verboseOut.push(`removed directory '${path}'`);
           } else {
-            absolutePath = join(cwd, path);
-          }
-
-          // Prevent removing current directory or parent directory
-          if (path === '.' || path === '..') {
-            return createErrorResult(`${this.name}: cannot remove '${path}': Invalid argument`);
-          }
-
-
-
-          try {
-            const stats = await this.fs.stat(absolutePath);
-
-            if (stats.isDirectory()) {
-              if (!options.recursive) {
-                return createErrorResult(`${this.name}: cannot remove '${path}': Is a directory`);
-              }
-
-              // Recursive directory removal
-              await this.removeDirectoryRecursive(absolutePath);
-            } else {
-              // Remove file
-              await this.fs.unlink(absolutePath);
+            if (!opts.force) {
+              errors.push(`${this.name}: cannot remove '${path}': Is a directory`);
             }
-          } catch (statError) {
-            if (!options.force) {
-              if (statError instanceof Error) {
-                if (statError.message.includes('ENOENT') || statError.message.includes('not found')) {
-                  return createErrorResult(`${this.name}: cannot remove '${path}': No such file or directory`);
-                } else if (statError.message.includes('EACCES') || statError.message.includes('permission')) {
-                  return createErrorResult(`${this.name}: cannot remove '${path}': Permission denied`);
-                } else {
-                  return createErrorResult(`${this.name}: cannot remove '${path}': ${statError.message}`);
-                }
-              } else {
-                return createErrorResult(`${this.name}: cannot remove '${path}': Unknown error`);
-              }
-            }
-            // With -f flag, ignore errors for non-existent files
           }
-        } catch (error) {
-          if (!options.force) {
-            return createErrorResult(`${this.name}: cannot remove '${path}': ${error instanceof Error ? error.message : 'Unknown error'}`);
-          }
-          // With -f flag, continue with other files
-        }
-      }
-
-      return createSuccessResult('');
-
-    } catch (error) {
-      return createErrorResult(`${this.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  private async removeDirectoryRecursive(dirPath: string): Promise<void> {
-    try {
-      const entries = await this.fs.readdir(dirPath, { withFileTypes: true });
-
-      // Remove all contents first
-      for (const entry of entries) {
-        const entryPath = join(dirPath, entry.name);
-
-        if (entry.isDirectory()) {
-          await this.removeDirectoryRecursive(entryPath);
         } else {
-          await this.fs.unlink(entryPath);
+          await this.fs.unlink(absolutePath);
+          if (opts.verbose) verboseOut.push(`removed '${path}'`);
+        }
+      } catch (error) {
+        if (opts.force) continue;
+        const { kind, message } = classifyFsError(error);
+        if (kind === 'ENOENT') {
+          errors.push(`${this.name}: cannot remove '${path}': No such file or directory`);
+        } else if (kind === 'EACCES') {
+          errors.push(`${this.name}: cannot remove '${path}': Permission denied`);
+        } else {
+          errors.push(`${this.name}: cannot remove '${path}': ${message}`);
         }
       }
-
-      // Remove the directory itself
-      await this.fs.rmdir(dirPath);
-    } catch (error) {
-      throw new Error(`Failed to remove directory ${dirPath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+    if (errors.length > 0) {
+      const stdout = verboseOut.length > 0 ? verboseOut.join('\n') + '\n' : '';
+      return {
+        exitCode: 1,
+        stdout,
+        stderr: errors.join('\n'),
+      };
+    }
+
+    return createSuccessResult(verboseOut.length > 0 ? verboseOut.join('\n') + '\n' : '');
   }
 
-  private parseArgs(args: string[]): { options: { recursive: boolean; force: boolean }; paths: string[] } {
-    const options = { recursive: false, force: false };
-    const paths: string[] = [];
-
-    for (const arg of args) {
-      if (arg.startsWith('-')) {
-        // Parse options
-        for (let i = 1; i < arg.length; i++) {
-          const char = arg[i];
-          switch (char) {
-            case 'r':
-            case 'R':
-              options.recursive = true;
-              break;
-            case 'f':
-              options.force = true;
-              break;
-            default:
-              // Ignore unknown options for now
-              break;
-          }
-        }
+  private async removeDirectoryRecursive(dirPath: string, verboseOut: string[], verbose: boolean): Promise<void> {
+    const entries = await this.fs.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        await this.removeDirectoryRecursive(entryPath, verboseOut, verbose);
       } else {
-        paths.push(arg);
+        await this.fs.unlink(entryPath);
+        if (verbose) verboseOut.push(`removed '${entryPath}'`);
       }
     }
-
-    return { options, paths };
+    await this.fs.rmdir(dirPath);
   }
 }

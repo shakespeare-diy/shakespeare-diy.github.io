@@ -126,7 +126,7 @@ describe('ShellTool', () => {
     expect(catCommand).toEqual({
       name: 'cat',
       description: 'Concatenate and display file contents',
-      usage: 'cat [file...]',
+      usage: 'cat [-nbsETAvu] [--] [file...]',
     });
 
     // Check that other commands are included
@@ -150,9 +150,12 @@ describe('ShellTool', () => {
   });
 
   it('should show stderr output', async () => {
-    const result = await shellTool.execute({ command: 'cat' });
+    // With no args, cat reads empty stdin and outputs nothing.
+    // Use cat on a missing file to trigger an error instead.
+    vi.mocked(mockFS.stat).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+    const result = await shellTool.execute({ command: 'cat missing.txt' });
 
-    expect(result.content).toContain('missing file operand');
+    expect(result.content).toContain('No such file or directory');
     expect(result.content).toContain('Exit code: 1');
   });
 
@@ -165,7 +168,7 @@ describe('ShellTool', () => {
   it('should execute pwd command', async () => {
     const result = await shellTool.execute({ command: 'pwd' });
 
-    expect(result.content).toBe(testCwd);
+    expect(result.content).toBe(testCwd + '\n');
   });
 
   it('should handle cd command and update working directory', async () => {

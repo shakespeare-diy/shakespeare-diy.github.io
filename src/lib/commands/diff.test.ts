@@ -34,10 +34,9 @@ describe('DiffCommand', () => {
     const result = await diffCommand.execute(['file1.txt', 'file2.txt'], '/test');
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('2c2');
-    expect(result.stderr).toContain('< world');
-    expect(result.stderr).toContain('> planet');
-    expect(result.stdout).toBe('');
+    expect(result.stdout).toContain('2c2');
+    expect(result.stdout).toContain('< world');
+    expect(result.stdout).toContain('> planet');
   });
 
   it('should show differences in unified format', async () => {
@@ -49,11 +48,10 @@ describe('DiffCommand', () => {
     const result = await diffCommand.execute(['-u', 'file1.txt', 'file2.txt'], '/test');
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('--- file1.txt');
-    expect(result.stderr).toContain('+++ file2.txt');
-    expect(result.stderr).toContain('-world');
-    expect(result.stderr).toContain('+planet');
-    expect(result.stdout).toBe('');
+    expect(result.stdout).toContain('--- file1.txt');
+    expect(result.stdout).toContain('+++ file2.txt');
+    expect(result.stdout).toContain('-world');
+    expect(result.stdout).toContain('+planet');
   });
 
   it('should handle added lines', async () => {
@@ -65,9 +63,8 @@ describe('DiffCommand', () => {
     const result = await diffCommand.execute(['file1.txt', 'file2.txt'], '/test');
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('a');
-    expect(result.stderr).toContain('> world');
-    expect(result.stdout).toBe('');
+    expect(result.stdout).toContain('a');
+    expect(result.stdout).toContain('> world');
   });
 
   it('should handle deleted lines', async () => {
@@ -79,9 +76,8 @@ describe('DiffCommand', () => {
     const result = await diffCommand.execute(['file1.txt', 'file2.txt'], '/test');
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('d');
-    expect(result.stderr).toContain('< world');
-    expect(result.stdout).toBe('');
+    expect(result.stdout).toContain('d');
+    expect(result.stdout).toContain('< world');
   });
 
   it('should error when wrong number of arguments', async () => {
@@ -111,11 +107,11 @@ describe('DiffCommand', () => {
     expect(result.stderr).toContain('Is a directory');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await diffCommand.execute(['/absolute/path1', 'file2.txt'], '/test');
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should support absolute paths', async () => {
+    vi.mocked(mockFS.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true });
+    vi.mocked(mockFS.readFile).mockResolvedValue('same\n');
+    const result = await diffCommand.execute(['/a/file1', '/b/file2'], '/test');
+    expect(result.exitCode).toBe(0);
   });
 
   it('should handle empty files', async () => {

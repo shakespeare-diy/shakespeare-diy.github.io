@@ -31,7 +31,7 @@ describe('HeadCommand', () => {
   it('should have correct name and description', () => {
     expect(command.name).toBe('head');
     expect(command.description).toBe('Display the first lines of files');
-    expect(command.usage).toBe('head [-n lines] [file...]');
+    expect(command.usage).toBe('head [-n NUM] [-c NUM] [-qv] [--] [file...]');
   });
 
   it('should show first 10 lines by default', async () => {
@@ -69,17 +69,33 @@ describe('HeadCommand', () => {
     expect(result.stderr).toContain('Is a directory');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await command.execute(['/absolute/path'], '/project');
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should accept absolute paths', async () => {
+    const result = await command.execute(['/project/test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('line 1');
   });
 
-  it('should reject stdin', async () => {
-    const result = await command.execute(['-'], '/project');
+  it('should read from stdin via - when piped input is provided', async () => {
+    const result = await command.execute(['-n', '2', '-'], '/project', 'a\nb\nc\nd\n');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('a\nb\n');
+  });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('reading from stdin is not supported');
+  it('should support -NUM shorthand', async () => {
+    const result = await command.execute(['-3', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('line 1\nline 2\nline 3\n');
+  });
+
+  it('should support --lines=NUM long form', async () => {
+    const result = await command.execute(['--lines=2', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('line 1\nline 2\n');
+  });
+
+  it('should support -c for bytes', async () => {
+    const result = await command.execute(['-c', '6', 'test.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('line 1');
   });
 });

@@ -2,16 +2,27 @@ import { join, dirname, basename } from "path-browserify";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand, ShellCommandResult } from "./ShellCommand";
 import { createSuccessResult, createErrorResult } from "./ShellCommand";
-import { isAbsolutePath, validateWritePath } from "../security";
+import { validateWritePath } from "../security";
+import { classifyFsError, parseOptions, resolvePath } from "./utils";
 
 /**
- * Implementation of the 'cp' command
- * Copy files and directories
+ * Implementation of the 'cp' command.
+ *
+ * Supported options:
+ *   -r, -R, --recursive   Copy directories recursively
+ *   -f, --force           Force overwrite (remove destination first if needed)
+ *   -i, --interactive     Prompt before overwrite (no-op: always treated as 'yes' in non-interactive env)
+ *   -n, --no-clobber      Do not overwrite an existing file
+ *   -p, --preserve        Preserve timestamps (best-effort; VFS lacks chmod)
+ *   -a, --archive         Equivalent to -rp
+ *   -v, --verbose         Explain what is being done
+ *   -T, --no-target-directory  Treat destination as a normal file
+ *   --                    End of options
  */
 export class CpCommand implements ShellCommand {
   name = 'cp';
   description = 'Copy files and directories';
-  usage = 'cp [-r] source... destination';
+  usage = 'cp [-rRfinpavT] [--] source... destination';
 
   private fs: JSRuntimeFS;
 
@@ -20,169 +31,164 @@ export class CpCommand implements ShellCommand {
   }
 
   async execute(args: string[], cwd: string, _input?: string): Promise<ShellCommandResult> {
-    if (args.length < 2) {
+    const parsed = parseOptions(args, {
+      booleanShort: ['r', 'R', 'f', 'i', 'n', 'p', 'a', 'v', 'T'],
+      booleanLong: ['recursive', 'force', 'interactive', 'no-clobber', 'preserve', 'archive', 'verbose', 'no-target-directory'],
+      longToShort: {
+        recursive: 'r',
+        force: 'f',
+        interactive: 'i',
+        'no-clobber': 'n',
+        preserve: 'p',
+        archive: 'a',
+        verbose: 'v',
+        'no-target-directory': 'T',
+      },
+      shortAliases: { R: 'r' },
+    });
+
+    if (parsed.unknown.length > 0) {
+      return createErrorResult(`${this.name}: invalid option -- '${parsed.unknown[0].replace(/^-+/, '')}'`);
+    }
+
+    const opts = {
+      recursive: parsed.flags.has('r') || parsed.flags.has('a'),
+      force: parsed.flags.has('f'),
+      noClobber: parsed.flags.has('n'),
+      verbose: parsed.flags.has('v'),
+      noTargetDir: parsed.flags.has('T'),
+    };
+
+    const paths = parsed.operands;
+    if (paths.length < 1) {
       return createErrorResult(`${this.name}: missing file operand\nUsage: ${this.usage}`);
     }
+    if (paths.length < 2) {
+      return createErrorResult(`${this.name}: missing destination file operand after '${paths[0]}'\nUsage: ${this.usage}`);
+    }
+
+    const sources = paths.slice(0, -1);
+    const destination = paths[paths.length - 1];
 
     try {
-      const { options, paths } = this.parseArgs(args);
-
-      if (paths.length < 2) {
-        return createErrorResult(`${this.name}: missing destination file operand after '${paths[0] || ''}'\nUsage: ${this.usage}`);
-      }
-
-      const sources = paths.slice(0, -1);
-      const destination = paths[paths.length - 1];
-
-      // Check write permissions for destination (sources can be read from anywhere)
-      try {
-        validateWritePath(destination, this.name, cwd);
-      } catch (error) {
-        return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
-      }
-
-      // Handle both absolute and relative paths for destination
-      let destAbsolutePath: string;
-      if (isAbsolutePath(destination)) {
-        destAbsolutePath = destination;
-      } else {
-        destAbsolutePath = join(cwd, destination);
-      }
-
-      // Check if destination exists and is a directory
-      let destIsDir = false;
-      try {
-        const destStats = await this.fs.stat(destAbsolutePath);
-        destIsDir = destStats.isDirectory();
-      } catch {
-        // Destination doesn't exist, that's fine
-      }
-
-      // If multiple sources, destination must be a directory
-      if (sources.length > 1 && !destIsDir) {
-        return createErrorResult(`${this.name}: target '${destination}' is not a directory`);
-      }
-
-      for (const source of sources) {
-        try {
-          // Handle both absolute and relative paths for source
-          let sourceAbsolutePath: string;
-          if (isAbsolutePath(source)) {
-            sourceAbsolutePath = source;
-          } else {
-            sourceAbsolutePath = join(cwd, source);
-          }
-          const sourceStats = await this.fs.stat(sourceAbsolutePath);
-
-          let targetPath: string;
-          if (destIsDir) {
-            // Copy into directory
-            targetPath = join(destAbsolutePath, basename(source));
-          } else {
-            // Copy to specific file
-            targetPath = destAbsolutePath;
-          }
-
-          if (sourceStats.isDirectory()) {
-            if (!options.recursive) {
-              return createErrorResult(`${this.name}: -r not specified; omitting directory '${source}'`);
-            }
-
-            // Recursive directory copy
-            await this.copyDirectoryRecursive(sourceAbsolutePath, targetPath);
-          } else {
-            // Copy file
-            await this.copyFile(sourceAbsolutePath, targetPath);
-          }
-
-        } catch (error) {
-          if (error instanceof Error) {
-            if (error.message.includes('ENOENT') || error.message.includes('not found')) {
-              return createErrorResult(`${this.name}: cannot stat '${source}': No such file or directory`);
-            } else if (error.message.includes('EACCES') || error.message.includes('permission')) {
-              return createErrorResult(`${this.name}: cannot access '${source}': Permission denied`);
-            } else {
-              return createErrorResult(`${this.name}: cannot copy '${source}': ${error.message}`);
-            }
-          } else {
-            return createErrorResult(`${this.name}: cannot copy '${source}': Unknown error`);
-          }
-        }
-      }
-
-      return createSuccessResult('');
-
+      validateWritePath(destination, this.name, cwd);
     } catch (error) {
-      return createErrorResult(`${this.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
     }
+
+    const destAbsolutePath = resolvePath(destination, cwd);
+
+    let destIsDir = false;
+    try {
+      const destStats = await this.fs.stat(destAbsolutePath);
+      destIsDir = destStats.isDirectory();
+    } catch {
+      // Destination doesn't exist — that's fine
+    }
+    if (opts.noTargetDir) destIsDir = false;
+
+    if (sources.length > 1 && !destIsDir) {
+      return createErrorResult(`${this.name}: target '${destination}' is not a directory`);
+    }
+
+    const verboseOut: string[] = [];
+
+    for (const source of sources) {
+      try {
+        const sourceAbsolutePath = resolvePath(source, cwd);
+        const sourceStats = await this.fs.stat(sourceAbsolutePath);
+
+        const targetPath = destIsDir
+          ? join(destAbsolutePath, basename(source))
+          : destAbsolutePath;
+
+        // Existence / no-clobber check.
+        let targetExists = false;
+        try {
+          await this.fs.stat(targetPath);
+          targetExists = true;
+        } catch {
+          // Doesn't exist.
+        }
+
+        if (targetExists && opts.noClobber) {
+          continue; // Silently skip.
+        }
+
+        if (sourceStats.isDirectory()) {
+          if (!opts.recursive) {
+            return createErrorResult(`${this.name}: -r not specified; omitting directory '${source}'`);
+          }
+          await this.copyDirectoryRecursive(sourceAbsolutePath, targetPath, opts.force, verboseOut, opts.verbose, source);
+        } else {
+          if (targetExists && opts.force) {
+            try {
+              await this.fs.unlink(targetPath);
+            } catch {
+              // Non-fatal; writeFile below may still succeed.
+            }
+          }
+          await this.copyFile(sourceAbsolutePath, targetPath);
+          if (opts.verbose) verboseOut.push(`'${source}' -> '${targetPath}'`);
+        }
+      } catch (error) {
+        const { kind, message } = classifyFsError(error);
+        if (kind === 'ENOENT') {
+          return createErrorResult(`${this.name}: cannot stat '${source}': No such file or directory`);
+        }
+        if (kind === 'EACCES') {
+          return createErrorResult(`${this.name}: cannot access '${source}': Permission denied`);
+        }
+        return createErrorResult(`${this.name}: cannot copy '${source}': ${message}`);
+      }
+    }
+
+    return createSuccessResult(verboseOut.length > 0 ? verboseOut.join('\n') + '\n' : '');
   }
 
   private async copyFile(sourcePath: string, targetPath: string): Promise<void> {
+    // Ensure parent dir exists. POSIX cp would error, but we keep this
+    // permissive behavior because our VFS often lacks intermediate dirs
+    // and it matches existing project expectations.
+    const targetDir = dirname(targetPath);
     try {
-      // Ensure target directory exists
-      const targetDir = dirname(targetPath);
-      try {
-        await this.fs.stat(targetDir);
-      } catch {
-        await this.fs.mkdir(targetDir, { recursive: true });
-      }
-
-      // Read source file and write to target
-      const content = await this.fs.readFile(sourcePath);
-      await this.fs.writeFile(targetPath, content);
-    } catch (error) {
-      throw new Error(`Failed to copy file ${sourcePath} to ${targetPath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      await this.fs.stat(targetDir);
+    } catch {
+      await this.fs.mkdir(targetDir, { recursive: true });
     }
+    const content = await this.fs.readFile(sourcePath);
+    await this.fs.writeFile(targetPath, content);
   }
 
-  private async copyDirectoryRecursive(sourcePath: string, targetPath: string): Promise<void> {
-    try {
-      // Create target directory
-      await this.fs.mkdir(targetPath, { recursive: true });
+  private async copyDirectoryRecursive(
+    sourcePath: string,
+    targetPath: string,
+    force: boolean,
+    verboseOut: string[],
+    verbose: boolean,
+    displaySource: string,
+  ): Promise<void> {
+    await this.fs.mkdir(targetPath, { recursive: true });
+    if (verbose) verboseOut.push(`'${displaySource}' -> '${targetPath}'`);
 
-      // Get all entries in source directory
-      const entries = await this.fs.readdir(sourcePath, { withFileTypes: true });
-
-      // Copy each entry
-      for (const entry of entries) {
-        const sourceEntryPath = join(sourcePath, entry.name);
-        const targetEntryPath = join(targetPath, entry.name);
-
-        if (entry.isDirectory()) {
-          await this.copyDirectoryRecursive(sourceEntryPath, targetEntryPath);
-        } else {
-          await this.copyFile(sourceEntryPath, targetEntryPath);
-        }
-      }
-    } catch (error) {
-      throw new Error(`Failed to copy directory ${sourcePath} to ${targetPath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  private parseArgs(args: string[]): { options: { recursive: boolean }; paths: string[] } {
-    const options = { recursive: false };
-    const paths: string[] = [];
-
-    for (const arg of args) {
-      if (arg.startsWith('-')) {
-        // Parse options
-        for (let i = 1; i < arg.length; i++) {
-          const char = arg[i];
-          switch (char) {
-            case 'r':
-            case 'R':
-              options.recursive = true;
-              break;
-            default:
-              // Ignore unknown options for now
-              break;
-          }
-        }
+    const entries = await this.fs.readdir(sourcePath, { withFileTypes: true });
+    for (const entry of entries) {
+      const sourceEntryPath = join(sourcePath, entry.name);
+      const targetEntryPath = join(targetPath, entry.name);
+      if (entry.isDirectory()) {
+        await this.copyDirectoryRecursive(sourceEntryPath, targetEntryPath, force, verboseOut, verbose, `${displaySource}/${entry.name}`);
       } else {
-        paths.push(arg);
+        try {
+          await this.fs.stat(targetEntryPath);
+          if (force) {
+            try { await this.fs.unlink(targetEntryPath); } catch { /* ignore */ }
+          }
+        } catch {
+          // Target doesn't exist — fine.
+        }
+        await this.copyFile(sourceEntryPath, targetEntryPath);
+        if (verbose) verboseOut.push(`'${displaySource}/${entry.name}' -> '${targetEntryPath}'`);
       }
     }
-
-    return { options, paths };
   }
 }

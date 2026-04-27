@@ -129,11 +129,12 @@ describe('CutCommand', () => {
     expect(result.stderr).toContain('Is a directory');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await cutCommand.execute(['-c', '1', '/absolute/path'], '/test');
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should support absolute paths', async () => {
+    vi.mocked(mockFS.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true });
+    vi.mocked(mockFS.readFile).mockResolvedValue('hello\n');
+    const result = await cutCommand.execute(['-c', '1-3', '/abs/file'], '/test');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('hel\n');
   });
 
   it('should return empty output for no files', async () => {

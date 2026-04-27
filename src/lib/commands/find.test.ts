@@ -41,7 +41,7 @@ describe('FindCommand', () => {
   it('should have correct name and description', () => {
     expect(command.name).toBe('find');
     expect(command.description).toBe('Search for files and directories');
-    expect(command.usage).toBe('find [path...] [-name pattern] [-type f|d]');
+    expect(command.usage).toBe('find [path...] [expression]');
   });
 
   it('should find all files and directories by default', async () => {
@@ -95,14 +95,26 @@ describe('FindCommand', () => {
     const result = await command.execute(['nonexistent'], '/project');
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('No such file or directory');
+    expect(result.stderr).toContain('ENOENT');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await command.execute(['/absolute/path'], '/project');
+  it('should support absolute paths', async () => {
+    const result = await command.execute(['/project', '-name', '*.txt'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('/project/test.txt');
+  });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should support -iname for case-insensitive matching', async () => {
+    const result = await command.execute(['.', '-iname', '*.TS'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('./src/index.ts');
+  });
+
+  it('should support -maxdepth', async () => {
+    const result = await command.execute(['.', '-maxdepth', '1', '-type', 'f'], '/project');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('./test.txt');
+    expect(result.stdout).not.toContain('./src/index.ts');
   });
 
   it('should default to current directory when no path specified', async () => {

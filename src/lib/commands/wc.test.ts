@@ -37,7 +37,7 @@ describe('WcCommand', () => {
   it('should have correct name and description', () => {
     expect(command.name).toBe('wc');
     expect(command.description).toBe('Count lines, words, and characters in files');
-    expect(command.usage).toBe('wc [-l] [-w] [-c] [file...]');
+    expect(command.usage).toBe('wc [-lwcmL] [--] [file...]');
   });
 
   it('should count lines, words, and characters by default', async () => {
@@ -98,17 +98,9 @@ describe('WcCommand', () => {
     expect(result.stderr).toContain('Is a directory');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await command.execute(['/absolute/path'], '/project');
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('absolute paths are not supported');
-  });
-
-  it('should reject stdin', async () => {
-    const result = await command.execute(['-'], '/project');
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('reading from stdin is not supported');
+  it('should count from stdin via -', async () => {
+    const result = await command.execute(['-'], '/project', 'one two three\nfour\n');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toMatch(/2\s+4\s+19/);
   });
 });

@@ -30,7 +30,7 @@ describe('MvCommand', () => {
   it('should have correct command properties', () => {
     expect(mvCommand.name).toBe('mv');
     expect(mvCommand.description).toBe('Move/rename files and directories');
-    expect(mvCommand.usage).toBe('mv source... destination');
+    expect(mvCommand.usage).toBe('mv [-finvT] [--] source... destination');
   });
 
   it.skip('should move/rename a file', async () => {

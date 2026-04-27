@@ -34,7 +34,7 @@ describe('MkdirCommand', () => {
   it('should have correct name and description', () => {
     expect(command.name).toBe('mkdir');
     expect(command.description).toBe('Create directories');
-    expect(command.usage).toBe('mkdir [-p] directory...');
+    expect(command.usage).toBe('mkdir [-pv] [-m mode] [--] directory...');
   });
 
   it('should create new directory', async () => {

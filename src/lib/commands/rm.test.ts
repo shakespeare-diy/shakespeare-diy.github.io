@@ -30,7 +30,7 @@ describe('RmCommand', () => {
   it('should have correct command properties', () => {
     expect(rmCommand.name).toBe('rm');
     expect(rmCommand.description).toBe('Remove files and directories');
-    expect(rmCommand.usage).toBe('rm [-rf] file...');
+    expect(rmCommand.usage).toBe('rm [-rRfdvi] [--] file...');
   });
 
   it('should remove a file', async () => {
@@ -99,11 +99,11 @@ describe('RmCommand', () => {
   it('should reject removing current or parent directory', async () => {
     const result1 = await rmCommand.execute(['.'], testCwd);
     expect(result1.exitCode).toBe(1);
-    expect(result1.stderr).toContain('Invalid argument');
+    expect(result1.stderr).toContain("refusing to remove");
 
     const result2 = await rmCommand.execute(['..'], testCwd);
     expect(result2.exitCode).toBe(1);
-    expect(result2.stderr).toContain('Invalid argument');
+    expect(result2.stderr).toContain("refusing to remove");
   });
 
   it('should return error when no operand provided', async () => {

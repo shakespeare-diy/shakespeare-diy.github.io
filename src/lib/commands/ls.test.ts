@@ -30,7 +30,7 @@ describe('LsCommand', () => {
   it('should have correct command properties', () => {
     expect(lsCommand.name).toBe('ls');
     expect(lsCommand.description).toBe('List directory contents');
-    expect(lsCommand.usage).toBe('ls [-la] [file...]');
+    expect(lsCommand.usage).toBe('ls [-aAldrRt1FhSn] [--] [file...]');
   });
 
   it('should list current directory when no arguments', async () => {

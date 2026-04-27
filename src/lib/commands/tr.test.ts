@@ -136,11 +136,12 @@ describe('TrCommand', () => {
     expect(result.stderr).toContain('Is a directory');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await trCommand.execute(['a', 'A', '/absolute/path'], '/test');
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should support absolute paths', async () => {
+    vi.mocked(mockFS.stat).mockResolvedValue({ isDirectory: () => false, isFile: () => true });
+    vi.mocked(mockFS.readFile).mockResolvedValue('abc');
+    const result = await trCommand.execute(['a', 'A', '/abs/file'], '/test');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('Abc');
   });
 
   it('should return empty output for no files', async () => {

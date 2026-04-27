@@ -148,7 +148,7 @@ describe('SedCommand', () => {
       const result = await sedCommand.execute(['-n', '2p'], '/test', input);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toBe('');
+      expect(result.stdout).toBe('line2\n');
     });
   });
 
@@ -203,11 +203,11 @@ describe('SedCommand', () => {
       expect(result.stderr).toContain('No such file or directory');
     });
 
-    it('should reject absolute paths', async () => {
-      const result = await sedCommand.execute(['s/hello/hi/', '/absolute/path.txt'], '/test');
+    it('should accept absolute paths', async () => {
+      const result = await sedCommand.execute(['s/hello/hi/', '/test/hello.txt'], '/test');
 
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain('absolute paths are not supported');
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('hi world');
     });
   });
 
@@ -217,7 +217,7 @@ describe('SedCommand', () => {
       const result = await sedCommand.execute(['-n', 'p'], '/test', input);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toBe('');
+      expect(result.stdout).toBe('line1\nline2\n');
     });
 
     it('should parse -e option', async () => {
@@ -233,7 +233,7 @@ describe('SedCommand', () => {
       const result = await sedCommand.execute(['-ne', 'p'], '/test', input);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toBe('');
+      expect(result.stdout).toBe('line1\nline2\n');
     });
   });
 

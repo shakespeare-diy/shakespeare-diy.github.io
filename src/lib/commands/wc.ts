@@ -1,16 +1,26 @@
-import { join } from "path-browserify";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand, ShellCommandResult } from "./ShellCommand";
 import { createSuccessResult, createErrorResult } from "./ShellCommand";
+import { classifyFsError, parseOptions, resolvePath } from "./utils";
 
 /**
- * Implementation of the 'wc' command
- * Count lines, words, and characters in files
+ * Implementation of the 'wc' command.
+ *
+ * Supported options:
+ *   -l, --lines          Count newlines
+ *   -w, --words          Count whitespace-delimited words
+ *   -c, --bytes          Count bytes (UTF-8)
+ *   -m, --chars          Count characters (code points)
+ *   -L, --max-line-length  Print the longest line length
+ *   --                   End of options
+ *   -                    Read from stdin
+ *
+ * Default (no count options) prints: lines, words, bytes.
  */
 export class WcCommand implements ShellCommand {
   name = 'wc';
   description = 'Count lines, words, and characters in files';
-  usage = 'wc [-l] [-w] [-c] [file...]';
+  usage = 'wc [-lwcmL] [--] [file...]';
 
   private fs: JSRuntimeFS;
 
@@ -19,168 +29,107 @@ export class WcCommand implements ShellCommand {
   }
 
   async execute(args: string[], cwd: string, input?: string): Promise<ShellCommandResult> {
-    const { options, files } = this.parseArgs(args);
+    const parsed = parseOptions(args, {
+      booleanShort: ['l', 'w', 'c', 'm', 'L'],
+      booleanLong: ['lines', 'words', 'bytes', 'chars', 'max-line-length'],
+      longToShort: {
+        lines: 'l', words: 'w', bytes: 'c', chars: 'm', 'max-line-length': 'L',
+      },
+    });
 
-    // If no specific options, show all counts
-    if (!options.lines && !options.words && !options.chars) {
-      options.lines = true;
-      options.words = true;
-      options.chars = true;
+    if (parsed.unknown.length > 0) {
+      return createErrorResult(`${this.name}: invalid option -- '${parsed.unknown[0].replace(/^-+/, '')}'`);
     }
 
-    // If input is provided (from pipe), count that input
-    if (input !== undefined) {
-      const counts = this.countContent(input);
-      const output: string[] = [];
+    let opts = {
+      lines: parsed.flags.has('l'),
+      words: parsed.flags.has('w'),
+      bytes: parsed.flags.has('c'),
+      chars: parsed.flags.has('m'),
+      maxLine: parsed.flags.has('L'),
+    };
 
-      if (options.lines) output.push(counts.lines.toString());
-      if (options.words) output.push(counts.words.toString());
-      if (options.chars) output.push(counts.chars.toString());
-
-      return createSuccessResult(output.join(' ') + '\n');
+    // Default: -lwc
+    if (!opts.lines && !opts.words && !opts.bytes && !opts.chars && !opts.maxLine) {
+      opts = { lines: true, words: true, bytes: true, chars: false, maxLine: false };
     }
 
-    const targetFiles = files.length > 0 ? files : ['-']; // stdin if no files
+    const files = parsed.operands.length > 0 ? parsed.operands : ['-'];
+    const results: Array<{ counts: Counts; name: string }> = [];
+    const total: Counts = { lines: 0, words: 0, bytes: 0, chars: 0, maxLine: 0 };
 
-    try {
-      const results: Array<{ lines: number; words: number; chars: number; name: string }> = [];
-      let totalLines = 0;
-      let totalWords = 0;
-      let totalChars = 0;
-
-      for (const filePath of targetFiles) {
+    for (const filePath of files) {
+      let content: string;
+      if (filePath === '-') {
+        content = input ?? '';
+      } else {
         try {
-          if (filePath === '-') {
-            return createErrorResult(`${this.name}: reading from stdin is not supported`);
-          }
-
-          // Handle absolute paths
-          if (filePath.startsWith('/') || filePath.startsWith('\\') || /^[A-Za-z]:[\\/]/.test(filePath)) {
-            return createErrorResult(`${this.name}: absolute paths are not supported: ${filePath}`);
-          }
-
-          const absolutePath = join(cwd, filePath);
-
-          // Check if path exists and is a file
+          const absolutePath = resolvePath(filePath, cwd);
           const stats = await this.fs.stat(absolutePath);
-
           if (stats.isDirectory()) {
             return createErrorResult(`${this.name}: ${filePath}: Is a directory`);
           }
-
-          // Read file content
-          const content = await this.fs.readFile(absolutePath, 'utf8');
-
-          // Count lines, words, and characters
-          const lines = content === '' ? 0 : content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
-          const words = content.trim() ? content.trim().split(/\s+/).length : 0;
-          const chars = content.length;
-
-          results.push({ lines, words, chars, name: filePath });
-          totalLines += lines;
-          totalWords += words;
-          totalChars += chars;
-
+          content = await this.fs.readFile(absolutePath, 'utf8');
         } catch (error) {
-          if (error instanceof Error) {
-            if (error.message.includes('ENOENT') || error.message.includes('not found')) {
-              return createErrorResult(`${this.name}: ${filePath}: No such file or directory`);
-            } else if (error.message.includes('EACCES') || error.message.includes('permission')) {
-              return createErrorResult(`${this.name}: ${filePath}: Permission denied`);
-            } else {
-              return createErrorResult(`${this.name}: ${filePath}: ${error.message}`);
-            }
-          } else {
-            return createErrorResult(`${this.name}: ${filePath}: Unknown error`);
+          const { kind } = classifyFsError(error);
+          if (kind === 'ENOENT') {
+            return createErrorResult(`${this.name}: ${filePath}: No such file or directory`);
           }
-        }
-      }
-
-      // Format output
-      const outputs: string[] = [];
-
-      for (const result of results) {
-        const parts: string[] = [];
-
-        if (options.lines) {
-          parts.push(result.lines.toString().padStart(8));
-        }
-        if (options.words) {
-          parts.push(result.words.toString().padStart(8));
-        }
-        if (options.chars) {
-          parts.push(result.chars.toString().padStart(8));
-        }
-
-        parts.push(result.name);
-        outputs.push(parts.join(' '));
-      }
-
-      // Add total line if multiple files
-      if (results.length > 1) {
-        const parts: string[] = [];
-
-        if (options.lines) {
-          parts.push(totalLines.toString().padStart(8));
-        }
-        if (options.words) {
-          parts.push(totalWords.toString().padStart(8));
-        }
-        if (options.chars) {
-          parts.push(totalChars.toString().padStart(8));
-        }
-
-        parts.push('total');
-        outputs.push(parts.join(' '));
-      }
-
-      return createSuccessResult(outputs.join('\n') + (outputs.length > 0 ? '\n' : ''));
-
-    } catch (error) {
-      return createErrorResult(`${this.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  private parseArgs(args: string[]): {
-    options: { lines: boolean; words: boolean; chars: boolean };
-    files: string[];
-  } {
-    const options = { lines: false, words: false, chars: false };
-    const files: string[] = [];
-
-    for (const arg of args) {
-      if (arg.startsWith('-') && arg !== '-') {
-        // Parse options
-        for (let i = 1; i < arg.length; i++) {
-          const char = arg[i];
-          switch (char) {
-            case 'l':
-              options.lines = true;
-              break;
-            case 'w':
-              options.words = true;
-              break;
-            case 'c':
-              options.chars = true;
-              break;
-            default:
-              // Ignore unknown options
-              break;
+          if (kind === 'EACCES') {
+            return createErrorResult(`${this.name}: ${filePath}: Permission denied`);
           }
+          return createErrorResult(`${this.name}: ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-      } else {
-        files.push(arg);
       }
+
+      const counts = countContent(content);
+      results.push({ counts, name: filePath === '-' ? '' : filePath });
+      total.lines += counts.lines;
+      total.words += counts.words;
+      total.bytes += counts.bytes;
+      total.chars += counts.chars;
+      if (counts.maxLine > total.maxLine) total.maxLine = counts.maxLine;
     }
 
-    return { options, files };
-  }
+    const format = (c: Counts, name: string): string => {
+      const parts: string[] = [];
+      if (opts.lines) parts.push(String(c.lines).padStart(8));
+      if (opts.words) parts.push(String(c.words).padStart(8));
+      if (opts.bytes) parts.push(String(c.bytes).padStart(8));
+      if (opts.chars) parts.push(String(c.chars).padStart(8));
+      if (opts.maxLine) parts.push(String(c.maxLine).padStart(8));
+      if (name) parts.push(name);
+      return parts.join(' ').replace(/^ /, '');
+    };
 
-  private countContent(content: string): { lines: number; words: number; chars: number } {
-    const lines = content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
-    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
-    const chars = content.length;
+    const outputs = results.map((r) => format(r.counts, r.name));
+    if (results.length > 1) outputs.push(format(total, 'total'));
 
-    return { lines, words, chars };
+    return createSuccessResult(outputs.join('\n') + (outputs.length > 0 ? '\n' : ''));
   }
+}
+
+interface Counts {
+  lines: number;
+  words: number;
+  bytes: number;
+  chars: number;
+  maxLine: number;
+}
+
+function countContent(content: string): Counts {
+  const lines = (content.match(/\n/g) ?? []).length;
+  const trimmed = content.trim();
+  const words = trimmed ? trimmed.split(/\s+/).length : 0;
+  // POSIX -c is bytes: count UTF-8 byte length.
+  const bytes = new TextEncoder().encode(content).length;
+  // -m is characters (code points).
+  let chars = 0;
+  for (const _ of content) chars++;
+  // -L: max line length (without the trailing newline).
+  let maxLine = 0;
+  for (const line of content.split('\n')) {
+    if (line.length > maxLine) maxLine = line.length;
+  }
+  return { lines, words, bytes, chars, maxLine };
 }

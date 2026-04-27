@@ -12,14 +12,14 @@ describe('PwdCommand', () => {
   it('should have correct command properties', () => {
     expect(pwdCommand.name).toBe('pwd');
     expect(pwdCommand.description).toBe('Print working directory');
-    expect(pwdCommand.usage).toBe('pwd');
+    expect(pwdCommand.usage).toBe('pwd [-LP]');
   });
 
   it('should return current working directory', async () => {
     const result = await pwdCommand.execute([], testCwd);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe(testCwd);
+    expect(result.stdout).toBe(testCwd + '\n');
     expect(result.stderr).toBe('');
   });
 

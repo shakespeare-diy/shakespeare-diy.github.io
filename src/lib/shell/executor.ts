@@ -702,6 +702,11 @@ export class ShellExecutor {
     this.vars[name] = value;
   }
 
+  /** Get a snapshot of all environment variables. */
+  getVars(): Record<string, string> {
+    return { ...this.vars };
+  }
+
   getExitCode(): number { return this.lastExitCode; }
 }
 

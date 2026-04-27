@@ -89,7 +89,8 @@ export class ShellTool implements Tool<ShellToolParams> {
 
     // Register all built-in commands.
     this.registerCommand(new CatCommand(fs));
-    this.registerCommand(new CdCommand(fs));
+    const cdCommand = new CdCommand(fs);
+    this.registerCommand(cdCommand);
     this.registerCommand(new ClearCommand());
     this.registerCommand(new CpCommand(fs));
     this.registerCommand(new CurlCommand(fs, this.corsProxy));
@@ -97,7 +98,8 @@ export class ShellTool implements Tool<ShellToolParams> {
     this.registerCommand(new DateCommand());
     this.registerCommand(new DiffCommand(fs));
     this.registerCommand(new EchoCommand());
-    this.registerCommand(new EnvCommand());
+    const envCommand = new EnvCommand();
+    this.registerCommand(envCommand);
     this.registerCommand(new FindCommand(fs));
     this.registerCommand(new GitCommand({ git: this.git, fs, cwd, signer: this.signer }));
     this.registerCommand(new GrepCommand(fs));
@@ -125,8 +127,11 @@ export class ShellTool implements Tool<ShellToolParams> {
       fs,
       commands: this.commands,
       initialCwd: cwd,
-      initialEnv: { PWD: cwd, SHELL: '/bin/sh' },
+      initialEnv: { PWD: cwd, SHELL: '/bin/sh', HOME: cwd },
+      home: cwd,
     });
+    cdCommand.setHomeDir(cwd);
+    envCommand.envSource = () => this.executor.getVars();
   }
 
   private registerCommand(command: ShellCommand): void {

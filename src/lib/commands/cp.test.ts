@@ -30,7 +30,7 @@ describe('CpCommand', () => {
   it('should have correct command properties', () => {
     expect(cpCommand.name).toBe('cp');
     expect(cpCommand.description).toBe('Copy files and directories');
-    expect(cpCommand.usage).toBe('cp [-r] source... destination');
+    expect(cpCommand.usage).toBe('cp [-rRfinpavT] [--] source... destination');
   });
 
   it.skip('should copy a file', async () => {

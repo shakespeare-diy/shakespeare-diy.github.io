@@ -134,7 +134,7 @@ describe('ShellTool (end-to-end)', () => {
     });
 
     it('runs pwd', async () => {
-      expect(await run('pwd')).toBe('/work');
+      expect(await run('pwd')).toBe('/work\n');
     });
 
     it('cd changes cwd', async () => {

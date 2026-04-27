@@ -100,11 +100,15 @@ describe('SortCommand', () => {
     expect(result.stderr).toContain('Is a directory');
   });
 
-  it('should reject absolute paths', async () => {
-    const result = await sortCommand.execute(['/absolute/path'], '/test');
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain('absolute paths are not supported');
+  it('should support absolute paths', async () => {
+    vi.mocked(mockFS.stat).mockResolvedValue({
+      isDirectory: () => false,
+      isFile: () => true,
+    });
+    vi.mocked(mockFS.readFile).mockResolvedValue('b\na\n');
+    const result = await sortCommand.execute(['/abs/file'], '/test');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('a\nb\n');
   });
 
   it('should return empty output for no files', async () => {

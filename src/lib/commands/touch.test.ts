@@ -34,7 +34,7 @@ describe('TouchCommand', () => {
   it('should have correct name and description', () => {
     expect(command.name).toBe('touch');
     expect(command.description).toBe('Create empty files or update timestamps');
-    expect(command.usage).toBe('touch file...');
+    expect(command.usage).toBe('touch [-acmh] [-r FILE] [-d STRING] [-t STAMP] [--] file...');
   });
 
   it('should create new file', async () => {
@@ -51,11 +51,10 @@ describe('TouchCommand', () => {
     expect(result.stdout).toBe('');
   });
 
-  it('should handle directory error', async () => {
+  it('should handle directory (no-op, POSIX allows)', async () => {
     const result = await command.execute(['dir'], '/project');
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Is a directory');
+    // POSIX touch on a directory updates its mtime; we succeed silently.
+    expect(result.exitCode).toBe(0);
   });
 
   it('should require file operand', async () => {

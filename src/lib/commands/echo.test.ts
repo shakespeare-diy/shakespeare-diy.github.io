@@ -12,7 +12,7 @@ describe('EchoCommand', () => {
   it('should have correct command properties', () => {
     expect(echoCommand.name).toBe('echo');
     expect(echoCommand.description).toBe('Display text');
-    expect(echoCommand.usage).toBe('echo [text...]');
+    expect(echoCommand.usage).toBe('echo [-neE] [text...]');
   });
 
   it('should echo single argument', async () => {

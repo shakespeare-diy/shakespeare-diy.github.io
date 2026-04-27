@@ -1,17 +1,23 @@
-import { join, dirname } from "path-browserify";
+import { dirname } from "path-browserify";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand, ShellCommandResult } from "./ShellCommand";
 import { createSuccessResult, createErrorResult } from "./ShellCommand";
-import { isAbsolutePath, validateWritePath } from "../security";
+import { validateWritePath } from "../security";
+import { classifyFsError, parseOptions, resolvePath } from "./utils";
 
 /**
- * Implementation of the 'mkdir' command
- * Create directories
+ * Implementation of the 'mkdir' command.
+ *
+ * Supported options:
+ *   -p, --parents   Create parent directories as needed; no error if existing
+ *   -v, --verbose   Print a message for each created directory
+ *   -m, --mode      Set file mode (accepted but ignored — VFS has no mode)
+ *   --              End of options
  */
 export class MkdirCommand implements ShellCommand {
   name = 'mkdir';
   description = 'Create directories';
-  usage = 'mkdir [-p] directory...';
+  usage = 'mkdir [-pv] [-m mode] [--] directory...';
 
   private fs: JSRuntimeFS;
 
@@ -20,150 +26,104 @@ export class MkdirCommand implements ShellCommand {
   }
 
   async execute(args: string[], cwd: string, _input?: string): Promise<ShellCommandResult> {
-    if (args.length === 0) {
-      return createErrorResult(`${this.name}: missing operand\nUsage: ${this.usage}`);
+    const parsed = parseOptions(args, {
+      booleanShort: ['p', 'v'],
+      valueShort: ['m'],
+      booleanLong: ['parents', 'verbose'],
+      valueLong: ['mode'],
+      longToShort: { parents: 'p', verbose: 'v', mode: 'm' },
+    });
+
+    if (parsed.unknown.length > 0) {
+      return createErrorResult(`${this.name}: invalid option -- '${parsed.unknown[0].replace(/^-+/, '')}'`);
     }
 
-    const { options, directories } = this.parseArgs(args);
+    const opts = {
+      parents: parsed.flags.has('p'),
+      verbose: parsed.flags.has('v'),
+    };
 
+    const directories = parsed.operands;
     if (directories.length === 0) {
       return createErrorResult(`${this.name}: missing operand\nUsage: ${this.usage}`);
     }
 
-    try {
-      for (const dirPath of directories) {
+    const verboseOut: string[] = [];
+
+    for (const dirPath of directories) {
+      try {
+        validateWritePath(dirPath, this.name, cwd);
+      } catch (error) {
+        return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
+      }
+
+      const absolutePath = resolvePath(dirPath, cwd);
+
+      if (opts.parents) {
         try {
-          // Validate write permissions for absolute paths
-          try {
-            validateWritePath(dirPath, this.name, cwd);
-          } catch (error) {
-            return createErrorResult(error instanceof Error ? error.message : 'Unknown error');
-          }
-
-          // Handle both absolute and relative paths
-          let absolutePath: string;
-          if (isAbsolutePath(dirPath)) {
-            absolutePath = dirPath;
-          } else {
-            absolutePath = join(cwd, dirPath);
-          }
-
-          if (options.parents) {
-            // Create parent directories as needed (-p option)
-            await this.createDirectoryRecursive(absolutePath, dirPath);
-          } else {
-            // Create only the specified directory
-            try {
-              // Check if it already exists
-              const stats = await this.fs.stat(absolutePath);
-              if (stats.isDirectory()) {
-                return createErrorResult(`${this.name}: cannot create directory '${dirPath}': File exists`);
-              } else {
-                return createErrorResult(`${this.name}: cannot create directory '${dirPath}': File exists`);
-              }
-            } catch (error) {
-              // Directory doesn't exist, try to create it
-              if (error instanceof Error &&
-                  (error.message.includes('ENOENT') || error.message.includes('not found'))) {
-
-                // Check if parent directory exists
-                const parentDir = dirname(absolutePath);
-                try {
-                  const parentStats = await this.fs.stat(parentDir);
-                  if (!parentStats.isDirectory()) {
-                    return createErrorResult(`${this.name}: cannot create directory '${dirPath}': Not a directory`);
-                  }
-                } catch {
-                  return createErrorResult(`${this.name}: cannot create directory '${dirPath}': No such file or directory`);
-                }
-
-                // Create the directory
-                await this.fs.mkdir(absolutePath);
-              } else {
-                return createErrorResult(`${this.name}: ${dirPath}: ${error instanceof Error ? error.message : String(error)}`);
-              }
-            }
-          }
-
+          await this.createRecursive(absolutePath, verboseOut, opts.verbose);
         } catch (error) {
-          if (error instanceof Error) {
-            if (error.message.includes('EACCES') || error.message.includes('permission')) {
-              return createErrorResult(`${this.name}: ${dirPath}: Permission denied`);
-            } else if (error.message.includes('EEXIST') || error.message.includes('exists')) {
-              if (!options.parents) {
-                return createErrorResult(`${this.name}: cannot create directory '${dirPath}': File exists`);
-              }
-              // With -p, ignore if directory already exists
-            } else {
-              return createErrorResult(`${this.name}: ${dirPath}: ${error.message}`);
-            }
-          } else {
-            return createErrorResult(`${this.name}: ${dirPath}: Unknown error`);
-          }
+          const { message } = classifyFsError(error);
+          return createErrorResult(`${this.name}: cannot create directory '${dirPath}': ${message}`);
+        }
+        continue;
+      }
+
+      // Without -p: error if exists or parent missing.
+      try {
+        await this.fs.stat(absolutePath);
+        return createErrorResult(`${this.name}: cannot create directory '${dirPath}': File exists`);
+      } catch (error) {
+        const { kind } = classifyFsError(error);
+        if (kind !== 'ENOENT') {
+          return createErrorResult(`${this.name}: ${dirPath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
-      return createSuccessResult('');
-
-    } catch (error) {
-      return createErrorResult(`${this.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  private async createDirectoryRecursive(absolutePath: string, originalPath: string): Promise<void> {
-    try {
-      // Check if directory already exists
-      const stats = await this.fs.stat(absolutePath);
-      if (stats.isDirectory()) {
-        return; // Already exists, nothing to do
-      } else {
-        throw new Error(`${this.name}: cannot create directory '${originalPath}': File exists`);
-      }
-    } catch (error) {
-      // Directory doesn't exist, try to create it
-      if (error instanceof Error &&
-          (error.message.includes('ENOENT') || error.message.includes('not found'))) {
-
-        // Try to create parent directory first
-        const parentDir = dirname(absolutePath);
-        if (parentDir !== absolutePath) { // Avoid infinite recursion
-          await this.createDirectoryRecursive(parentDir, dirname(originalPath));
+      const parentDir = dirname(absolutePath);
+      try {
+        const parentStats = await this.fs.stat(parentDir);
+        if (!parentStats.isDirectory()) {
+          return createErrorResult(`${this.name}: cannot create directory '${dirPath}': Not a directory`);
         }
+      } catch {
+        return createErrorResult(`${this.name}: cannot create directory '${dirPath}': No such file or directory`);
+      }
 
-        // Now create this directory
+      try {
         await this.fs.mkdir(absolutePath);
-      } else {
-        throw error;
+        if (opts.verbose) verboseOut.push(`${this.name}: created directory '${dirPath}'`);
+      } catch (error) {
+        const { message } = classifyFsError(error);
+        return createErrorResult(`${this.name}: cannot create directory '${dirPath}': ${message}`);
       }
     }
+
+    return createSuccessResult(verboseOut.length > 0 ? verboseOut.join('\n') + '\n' : '');
   }
 
-  private parseArgs(args: string[]): {
-    options: { parents: boolean };
-    directories: string[];
-  } {
-    const options = { parents: false };
-    const directories: string[] = [];
-
-    for (const arg of args) {
-      if (arg.startsWith('-') && arg !== '-') {
-        // Parse options
-        for (let i = 1; i < arg.length; i++) {
-          const char = arg[i];
-          switch (char) {
-            case 'p':
-              options.parents = true;
-              break;
-            default:
-              // Ignore unknown options
-              break;
-          }
-        }
-      } else {
-        directories.push(arg);
-      }
+  private async createRecursive(absolutePath: string, verboseOut: string[], verbose: boolean): Promise<void> {
+    try {
+      const stats = await this.fs.stat(absolutePath);
+      if (stats.isDirectory()) return;
+      throw new Error(`File exists`);
+    } catch (error) {
+      const { kind } = classifyFsError(error);
+      if (kind !== 'ENOENT') throw error;
     }
 
-    return { options, directories };
+    const parent = dirname(absolutePath);
+    if (parent !== absolutePath && parent !== '') {
+      await this.createRecursive(parent, verboseOut, verbose);
+    }
+
+    try {
+      await this.fs.mkdir(absolutePath);
+      if (verbose) verboseOut.push(`${this.name}: created directory '${absolutePath}'`);
+    } catch (error) {
+      const { kind } = classifyFsError(error);
+      // EEXIST is fine under -p (race).
+      if (kind !== 'EEXIST') throw error;
+    }
   }
 }

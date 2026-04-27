@@ -30,7 +30,7 @@ describe('CdCommand', () => {
   it('should have correct command properties', () => {
     expect(cdCommand.name).toBe('cd');
     expect(cdCommand.description).toBe('Change directory');
-    expect(cdCommand.usage).toBe('cd [directory]');
+    expect(cdCommand.usage).toBe('cd [-LP] [directory | -]');
   });
 
   it('should change to specified directory', async () => {
@@ -70,9 +70,28 @@ describe('CdCommand', () => {
     expect(result.newCwd).toBe('/test/current');
   });
 
-  it('should stay in current directory when no arguments', async () => {
+  it('should go to home directory when no arguments', async () => {
+    vi.mocked(mockFS.stat).mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    });
+    cdCommand.setHomeDir('/home/user');
+
     const result = await cdCommand.execute([], testCwd);
 
+    expect(result.exitCode).toBe(0);
+    expect(result.newCwd).toBe('/home/user');
+  });
+
+  it('should support cd - to go to OLDPWD', async () => {
+    vi.mocked(mockFS.stat).mockResolvedValue({
+      isDirectory: () => true,
+      isFile: () => false,
+    });
+    // First cd to establish OLDPWD
+    await cdCommand.execute(['/other'], testCwd);
+    // Now cd - should go back to testCwd
+    const result = await cdCommand.execute(['-'], '/other');
     expect(result.exitCode).toBe(0);
     expect(result.newCwd).toBe(testCwd);
   });
