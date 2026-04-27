@@ -290,4 +290,93 @@ describe('ShellTool', () => {
       expect(result.content).toContain('success');
     });
   });
+
+  describe('glob expansion', () => {
+    it('should expand * wildcard to matching filenames', async () => {
+      // /test/dir contains three files
+      vi.mocked(mockFS.readdir).mockImplementation(async (path: string) => {
+        if (path === '/test/dir') return ['a.tsx', 'b.tsx', 'readme.md'];
+        return [];
+      });
+      vi.mocked(mockFS.stat).mockResolvedValue({
+        isDirectory: () => false,
+        isFile: () => true,
+      });
+      vi.mocked(mockFS.readFile).mockResolvedValue('x');
+
+      await shellTool.execute({ command: 'cat *.tsx' });
+
+      // Both .tsx files should be read (in sorted order).
+      expect(mockFS.readFile).toHaveBeenCalledWith('/test/dir/a.tsx', 'utf8');
+      expect(mockFS.readFile).toHaveBeenCalledWith('/test/dir/b.tsx', 'utf8');
+      expect(mockFS.readFile).not.toHaveBeenCalledWith('/test/dir/readme.md', 'utf8');
+    });
+
+    it('should expand globs across path segments', async () => {
+      vi.mocked(mockFS.readdir).mockImplementation(async (path: string) => {
+        if (path === '/test/dir/src') return ['foo.ts', 'bar.ts'];
+        return [];
+      });
+      vi.mocked(mockFS.stat).mockResolvedValue({
+        isDirectory: () => false,
+        isFile: () => true,
+      });
+      vi.mocked(mockFS.readFile).mockResolvedValue('');
+
+      await shellTool.execute({ command: 'cat src/*.ts' });
+
+      expect(mockFS.readFile).toHaveBeenCalledWith('/test/dir/src/bar.ts', 'utf8');
+      expect(mockFS.readFile).toHaveBeenCalledWith('/test/dir/src/foo.ts', 'utf8');
+    });
+
+    it('should not expand quoted patterns', async () => {
+      vi.mocked(mockFS.readdir).mockResolvedValue(['a.tsx', 'b.tsx']);
+      vi.mocked(mockFS.stat).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+      const result = await shellTool.execute({ command: 'cat "*.tsx"' });
+
+      // Pattern preserved literally; readdir not consulted for this arg.
+      expect(mockFS.readdir).not.toHaveBeenCalled();
+      expect(result.content).toContain('No such file or directory');
+    });
+
+    it('should leave pattern unchanged when no files match', async () => {
+      vi.mocked(mockFS.readdir).mockResolvedValue(['readme.md']);
+      vi.mocked(mockFS.stat).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+      const result = await shellTool.execute({ command: 'cat *.tsx' });
+
+      // cat receives the literal "*.tsx" and fails to stat it.
+      expect(result.content).toContain('*.tsx');
+      expect(result.content).toContain('No such file or directory');
+    });
+
+    it('should skip hidden files unless pattern starts with dot', async () => {
+      vi.mocked(mockFS.readdir).mockResolvedValue(['.hidden.ts', 'visible.ts']);
+      vi.mocked(mockFS.stat).mockResolvedValue({
+        isDirectory: () => false,
+        isFile: () => true,
+      });
+      vi.mocked(mockFS.readFile).mockResolvedValue('');
+
+      await shellTool.execute({ command: 'cat *.ts' });
+
+      expect(mockFS.readFile).toHaveBeenCalledWith('/test/dir/visible.ts', 'utf8');
+      expect(mockFS.readFile).not.toHaveBeenCalledWith('/test/dir/.hidden.ts', 'utf8');
+    });
+
+    it('should not expand option flags starting with -', async () => {
+      // An arg like "-la" shouldn't be treated as a glob even if it
+      // somehow contained brackets.
+      vi.mocked(mockFS.readdir).mockResolvedValue(['file.txt']);
+      vi.mocked(mockFS.stat).mockResolvedValue({
+        isDirectory: () => true,
+        isFile: () => false,
+      });
+
+      const result = await shellTool.execute({ command: 'ls -la' });
+      // Just make sure it doesn't blow up; ls itself handles its own args.
+      expect(result.content).toBeDefined();
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { join } from "path-browserify";
 import type { Tool, ToolResult } from "./Tool";
 import type { JSRuntimeFS } from "../JSRuntime";
 import type { ShellCommand } from "../commands/ShellCommand";
@@ -113,9 +114,18 @@ export class ShellTool implements Tool<ShellToolParams> {
   }
 
   /**
-   * Parse a command string into command name, arguments, and redirection info
+   * Parse a command string into command name, arguments, and redirection info.
+   *
+   * Returns tokens alongside a flag indicating whether each token was fully
+   * quoted (so the caller knows whether glob expansion should apply).
    */
-  private parseCommand(commandStr: string): { name: string; args: string[]; redirectType?: '>' | '>>'; redirectFile?: string } {
+  private parseCommand(commandStr: string): {
+    name: string;
+    args: string[];
+    argQuoted: boolean[];
+    redirectType?: '>' | '>>';
+    redirectFile?: string;
+  } {
     // First, check for redirection operators
     let redirectType: '>' | '>>' | undefined;
     let redirectFile: string | undefined;
@@ -160,9 +170,11 @@ export class ShellTool implements Tool<ShellToolParams> {
       }
     }
 
-    // Parse the actual command part
+    // Parse the actual command part, tracking whether each token was quoted.
     const parts: string[] = [];
+    const partQuoted: boolean[] = [];
     let current = '';
+    let currentHasQuotes = false;
     inQuotes = false;
     quoteChar = '';
 
@@ -172,25 +184,30 @@ export class ShellTool implements Tool<ShellToolParams> {
       if (!inQuotes && (char === '"' || char === "'")) {
         inQuotes = true;
         quoteChar = char;
+        currentHasQuotes = true;
       } else if (inQuotes && char === quoteChar) {
         inQuotes = false;
         quoteChar = '';
       } else if (!inQuotes && char === ' ') {
-        if (current.trim()) {
+        if (current.trim() || currentHasQuotes) {
           parts.push(current.trim());
+          partQuoted.push(currentHasQuotes);
           current = '';
+          currentHasQuotes = false;
         }
       } else {
         current += char;
       }
     }
 
-    if (current.trim()) {
+    if (current.trim() || currentHasQuotes) {
       parts.push(current.trim());
+      partQuoted.push(currentHasQuotes);
     }
 
     const [name = '', ...args] = parts;
-    return { name, args, redirectType, redirectFile };
+    const argQuoted = partQuoted.slice(1);
+    return { name, args, argQuoted, redirectType, redirectFile };
   }
 
   /**
@@ -262,10 +279,162 @@ export class ShellTool implements Tool<ShellToolParams> {
   }
 
   /**
+   * Expand glob patterns in command arguments against the virtual filesystem.
+   *
+   * Supports `*`, `?`, and `[...]` wildcards in any path segment. Patterns
+   * that don't match any files are passed through unchanged (bash default
+   * behaviour without `nullglob`). Quoted arguments are never expanded.
+   * Arguments starting with `-` (option flags) are never expanded either.
+   */
+  private async expandGlobs(args: string[], quoted: boolean[]): Promise<string[]> {
+    const result: string[] = [];
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      const wasQuoted = quoted[i] ?? false;
+
+      if (wasQuoted || !this.hasGlobChars(arg) || arg.startsWith('-')) {
+        result.push(arg);
+        continue;
+      }
+
+      const matches = await this.expandSingleGlob(arg);
+      if (matches.length > 0) {
+        // Sort for deterministic order (matches bash behaviour).
+        matches.sort();
+        result.push(...matches);
+      } else {
+        // No matches: pass the literal pattern through (bash default).
+        result.push(arg);
+      }
+    }
+
+    return result;
+  }
+
+  /** True if the token contains unescaped glob metacharacters. */
+  private hasGlobChars(token: string): boolean {
+    return /[*?[]/.test(token);
+  }
+
+  /** Expand a single glob token to a list of matching paths. */
+  private async expandSingleGlob(pattern: string): Promise<string[]> {
+    // Split pattern into segments while preserving a leading slash for absolute paths.
+    const isAbsolute = pattern.startsWith('/');
+    const segments = (isAbsolute ? pattern.slice(1) : pattern).split('/');
+
+    // Fast path: no segment contains wildcards.
+    if (!segments.some((s) => this.hasGlobChars(s))) {
+      return [pattern];
+    }
+
+    // Walk segment-by-segment, expanding matches.
+    let candidates: string[] = [isAbsolute ? '/' : ''];
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const isLast = i === segments.length - 1;
+      const next: string[] = [];
+
+      for (const base of candidates) {
+        if (!this.hasGlobChars(segment)) {
+          // Literal segment: just append.
+          const combined = this.joinPath(base, segment);
+          next.push(combined);
+          continue;
+        }
+
+        // Wildcard segment: read the directory and filter.
+        const dirPath = this.resolveForListing(base);
+        let entries: string[];
+        try {
+          entries = await this.fs.readdir(dirPath);
+        } catch {
+          // Directory doesn't exist or isn't readable; this branch dies.
+          continue;
+        }
+
+        const regex = this.globToRegex(segment);
+        for (const entry of entries) {
+          // Skip hidden files unless the pattern explicitly starts with a dot.
+          if (entry.startsWith('.') && !segment.startsWith('.')) continue;
+          if (!regex.test(entry)) continue;
+
+          const combined = this.joinPath(base, entry);
+
+          if (!isLast) {
+            // Intermediate segment must be a directory.
+            try {
+              const stats = await this.fs.stat(this.resolveForListing(combined));
+              if (!stats.isDirectory()) continue;
+            } catch {
+              continue;
+            }
+          }
+
+          next.push(combined);
+        }
+      }
+
+      candidates = next;
+      if (candidates.length === 0) break;
+    }
+
+    return candidates;
+  }
+
+  /** Join a base path and a segment, preserving relative vs absolute form. */
+  private joinPath(base: string, segment: string): string {
+    if (!base) return segment;
+    if (base === '/') return '/' + segment;
+    if (!segment) return base;
+    return base + '/' + segment;
+  }
+
+  /** Resolve a (possibly relative) path to an absolute one for fs operations. */
+  private resolveForListing(p: string): string {
+    if (!p) return this.cwd;
+    if (p.startsWith('/')) return p;
+    return join(this.cwd, p);
+  }
+
+  /** Convert a shell glob segment to a RegExp. */
+  private globToRegex(glob: string): RegExp {
+    let regex = '^';
+    let i = 0;
+    while (i < glob.length) {
+      const ch = glob[i];
+      if (ch === '*') {
+        regex += '[^/]*';
+      } else if (ch === '?') {
+        regex += '[^/]';
+      } else if (ch === '[') {
+        // Character class: copy until closing ]
+        const close = glob.indexOf(']', i + 1);
+        if (close === -1) {
+          regex += '\\[';
+        } else {
+          let cls = glob.slice(i + 1, close);
+          if (cls.startsWith('!')) cls = '^' + cls.slice(1);
+          regex += '[' + cls + ']';
+          i = close;
+        }
+      } else if ('.+^$(){}|\\'.includes(ch)) {
+        regex += '\\' + ch;
+      } else {
+        regex += ch;
+      }
+      i++;
+    }
+    regex += '$';
+    return new RegExp(regex);
+  }
+
+  /**
    * Execute a single command and return the result
    */
   private async executeSingleCommand(commandStr: string, input?: string): Promise<{ stdout: string; stderr: string; exitCode: number; newCwd?: string }> {
-    const { name, args: cmdArgs, redirectType, redirectFile } = this.parseCommand(commandStr);
+    const { name, args: cmdArgs, argQuoted, redirectType, redirectFile } = this.parseCommand(commandStr);
 
     if (!name) {
       return { stdout: '', stderr: 'Error: No command specified', exitCode: 1 };
@@ -282,9 +451,14 @@ export class ShellTool implements Tool<ShellToolParams> {
       };
     }
 
+    // Perform glob expansion on unquoted arguments (bash-style).
+    // Commands that manage their own glob semantics (e.g. `find -name "*.ts"`)
+    // still work because quoted patterns are not expanded here.
+    const expandedArgs = await this.expandGlobs(cmdArgs, argQuoted);
+
     try {
       // Execute the command
-      const result = await command.execute(cmdArgs, this.cwd, input);
+      const result = await command.execute(expandedArgs, this.cwd, input);
 
       // Handle redirection if specified
       if (redirectType && redirectFile) {
