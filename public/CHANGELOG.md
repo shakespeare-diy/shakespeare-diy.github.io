@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.13.1] - 2026-04-27
+
+### Changed
+- AI agents now run commands through a real POSIX-style shell with proper quoting, pipes, redirects, and glob expansion, making multi-step project edits more reliable
+- Overhauled the built-in `git` commands used by AI agents, adding `ls-files`, `merge`, `mv`, `restore`, `rev-parse`, `revert`, `rm`, and `switch` alongside improvements across existing git operations
+- Overhauled core shell commands (`cat`, `cp`, `find`, `grep`, `ls`, `sed`, `sort`, and more) for closer POSIX behavior and better ergonomics when AI agents work on your project
+
 ## [9.13.0] - 2026-04-26
 
 ### Added
