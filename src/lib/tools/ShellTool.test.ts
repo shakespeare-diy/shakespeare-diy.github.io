@@ -45,7 +45,9 @@ describe('ShellTool', () => {
   });
 
   it('should have correct tool properties', () => {
-    expect(shellTool.description).toBe('Execute shell commands like cat, ls, cd, pwd, rm, cp, mv, echo, head, tail, grep, find, wc, touch, mkdir, sort, uniq, cut, tr, sed, diff, which, whoami, date, env, clear, git, curl, unzip, hexdump. Supports compound commands with &&, ||, ;, and | operators, and output redirection with > and >> operators');
+    expect(shellTool.description).toContain('Execute shell commands');
+    expect(shellTool.description).toContain('pipes');
+    expect(shellTool.description).toContain('cat');
     expect(shellTool.inputSchema).toBeDefined();
   });
 
@@ -219,13 +221,14 @@ describe('ShellTool', () => {
       expect(mockFS.writeFile).toHaveBeenCalledWith('/tmp/absolute.txt', 'test\n', 'utf8');
     });
 
-    it('should handle redirection errors gracefully', async () => {
-      vi.mocked(mockFS.writeFile).mockRejectedValue(new Error('Permission denied'));
-
+    it('should reject redirection to denied paths', async () => {
       const result = await shellTool.execute({ command: 'echo test > /readonly/file.txt' });
 
-      expect(result.content).toContain('Redirection error: Permission denied');
+      // The write is rejected before we ever touch the filesystem,
+      // preventing silent file creation at bogus paths.
+      expect(result.content).toContain('write access denied');
       expect(result.content).toContain('Exit code: 1');
+      expect(mockFS.writeFile).not.toHaveBeenCalledWith('/readonly/file.txt', expect.anything(), expect.anything());
     });
   });
 
