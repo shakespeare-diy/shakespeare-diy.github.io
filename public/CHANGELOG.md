@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.13.0] - 2026-04-26
+
+### Added
+- Build projects with Tailwind CSS v4, including `@import "tailwindcss"` entry files and third-party v4 plugins like `tw-animate-css`
+
 ## [9.12.0] - 2026-04-25
 
 ### Added
