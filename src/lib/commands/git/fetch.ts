@@ -26,7 +26,7 @@ export class GitFetchCommand implements GitSubcommand {
         return createErrorResult('fatal: not a git repository (or any of the parent directories): .git');
       }
 
-      const { remote, refs } = this.parseArgs(args);
+      const { remote, refs, options } = this.parseArgs(args);
 
       // Get remote URL
       let remoteUrl: string;
@@ -53,14 +53,18 @@ export class GitFetchCommand implements GitSubcommand {
               dir: cwd,
               remote: remote,
               ref: ref,
-            });
+              tags: options.tags,
+              prune: options.prune,
+            } as Parameters<typeof this.git.fetch>[0]);
           }
         } else {
           // Fetch all refs (default behavior)
           await this.git.fetch({
             dir: cwd,
             remote: remote,
-          });
+            tags: options.tags,
+            prune: options.prune,
+          } as Parameters<typeof this.git.fetch>[0]);
         }
 
         // Build output message

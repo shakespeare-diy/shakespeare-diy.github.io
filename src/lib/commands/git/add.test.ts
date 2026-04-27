@@ -63,7 +63,7 @@ describe('GitAddCommand', () => {
   it('should have correct command properties', () => {
     expect(addCommand.name).toBe('add');
     expect(addCommand.description).toBe('Add file contents to the index');
-    expect(addCommand.usage).toBe('git add [--all | -A] [--] [<pathspec>...]');
+    expect(addCommand.usage).toBe('git add [--all | -A] [--update | -u] [--force | -f] [--dry-run | -n] [--] [<pathspec>...]');
   });
 
   it('should return error when not in a git repository', async () => {
@@ -172,11 +172,21 @@ describe('GitAddCommand', () => {
     });
   });
 
-  it('should reject absolute paths', async () => {
+  it('should reject absolute paths outside the repo', async () => {
     const result = await addCommand.execute(['/absolute/path/file.txt'], testCwd);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('absolute paths are not supported');
+    expect(result.stderr).toContain('outside repository');
+  });
+
+  it('should accept absolute paths inside the repo', async () => {
+    const result = await addCommand.execute([`${testCwd}/file.txt`], testCwd);
+
+    expect(result.exitCode).toBe(0);
+    expect(mockGit.add).toHaveBeenCalledWith({
+      dir: testCwd,
+      filepath: 'file.txt',
+    });
   });
 
   it('should handle non-existent files', async () => {

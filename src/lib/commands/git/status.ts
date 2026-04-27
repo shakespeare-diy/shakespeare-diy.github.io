@@ -73,6 +73,12 @@ export class GitStatusCommand implements GitSubcommand {
     const lines: string[] = [];
 
     for (const [filepath, headStatus, workdirStatus, stageStatus] of statusMatrix) {
+      // Untracked files show as '??' in porcelain format
+      if (headStatus === 0 && stageStatus === 0 && workdirStatus === 2) {
+        lines.push(`?? ${filepath}`);
+        continue;
+      }
+
       let indexStatus = ' ';
       let workingStatus = ' ';
 
@@ -86,16 +92,13 @@ export class GitStatusCommand implements GitSubcommand {
       }
 
       // Determine working directory status (comparing stage to working dir)
-      if (headStatus === 0 && stageStatus === 0 && workdirStatus === 2) {
-        // Untracked files show as ?? in porcelain format
-        indexStatus = '?';
-        workingStatus = '?';
-      } else if (stageStatus === 2 && workdirStatus === 0) {
+      if ((stageStatus === 2 || stageStatus === 1) && workdirStatus === 0) {
         workingStatus = 'D'; // Deleted in working dir
-      } else if (stageStatus === 1 && workdirStatus === 0) {
-        workingStatus = 'D'; // Deleted in working dir (was same as HEAD)
-      } else if (stageStatus !== workdirStatus && workdirStatus === 2) {
+      } else if (stageStatus !== workdirStatus && workdirStatus === 2 && stageStatus !== 0) {
         workingStatus = 'M'; // Modified in working dir
+      } else if (stageStatus === 0 && workdirStatus === 2 && headStatus === 1) {
+        // File deleted from index but still in working dir - unusual, treat as modified
+        workingStatus = 'M';
       }
 
       // Only show files with changes

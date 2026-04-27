@@ -73,8 +73,12 @@ describe('GitResetCommand', () => {
       isFileReset: boolean;
     };
 
-    it('should parse no arguments as file reset', () => {
-      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs([]);
+    const callParseArgs = (args: string[]): Promise<ParseArgsResult> => {
+      return (command as unknown as { parseArgs: (args: string[], cwd: string) => Promise<ParseArgsResult> }).parseArgs(args, '/test/repo');
+    };
+
+    it('should parse no arguments as file reset', async () => {
+      const result = await callParseArgs([]);
       expect(result).toEqual({
         mode: 'mixed',
         target: 'HEAD',
@@ -83,8 +87,8 @@ describe('GitResetCommand', () => {
       });
     });
 
-    it('should parse HEAD as file reset', () => {
-      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['HEAD']);
+    it('should parse HEAD as file reset', async () => {
+      const result = await callParseArgs(['HEAD']);
       expect(result).toEqual({
         mode: 'mixed',
         target: 'HEAD',
@@ -93,8 +97,8 @@ describe('GitResetCommand', () => {
       });
     });
 
-    it('should parse HEAD with files as file reset', () => {
-      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['HEAD', 'file1.txt', 'file2.txt']);
+    it('should parse HEAD with files as file reset', async () => {
+      const result = await callParseArgs(['HEAD', 'file1.txt', 'file2.txt']);
       expect(result).toEqual({
         mode: 'mixed',
         target: 'HEAD',
@@ -103,8 +107,8 @@ describe('GitResetCommand', () => {
       });
     });
 
-    it('should parse commit hash as commit reset', () => {
-      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['abc123def']);
+    it('should parse commit hash as commit reset', async () => {
+      const result = await callParseArgs(['abc123def']);
       expect(result).toEqual({
         mode: 'mixed',
         target: 'abc123def',
@@ -113,8 +117,8 @@ describe('GitResetCommand', () => {
       });
     });
 
-    it('should parse mode flags correctly', () => {
-      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['--hard', 'HEAD~1']);
+    it('should parse mode flags correctly', async () => {
+      const result = await callParseArgs(['--hard', 'HEAD~1']);
       expect(result).toEqual({
         mode: 'hard',
         target: 'HEAD~1',
@@ -123,8 +127,8 @@ describe('GitResetCommand', () => {
       });
     });
 
-    it('should parse mixed mode with commit', () => {
-      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['--mixed', 'HEAD~1']);
+    it('should parse mixed mode with commit', async () => {
+      const result = await callParseArgs(['--mixed', 'HEAD~1']);
       expect(result).toEqual({
         mode: 'mixed',
         target: 'HEAD~1',
@@ -233,11 +237,11 @@ describe('GitResetCommand', () => {
       expect(result.stdout).toContain('HEAD is now at def456a');
     });
 
-    it('should return error for soft reset (not implemented)', async () => {
+    it('should handle commit reset with soft mode', async () => {
       const result = await command.execute(['--soft', 'HEAD~1'], '/test/repo');
 
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr).toContain('--soft reset is not implemented');
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('HEAD is now at def456a');
     });
 
     it('should handle invalid commit reference', async () => {

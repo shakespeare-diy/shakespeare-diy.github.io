@@ -148,7 +148,7 @@ describe('GitLogCommand', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('commit');
     expect(result.stdout).toContain('author');
-    expect(result.stdout).toMatch(/author .+ <.+> \d+ \+0000/);
+    expect(result.stdout).toMatch(/author .+ <.+> \d+ [+-]\d{4}/);
   });
 
   it('should show graph with --graph', async () => {

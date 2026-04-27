@@ -4,10 +4,18 @@ import { createSuccessResult, createErrorResult } from "../ShellCommand";
 import type { GitSubcommand, GitSubcommandOptions } from "../git";
 import type { Git } from "../../git";
 
+interface CheckoutOptions {
+  createBranch: boolean;
+  createOrReset: boolean;
+  force: boolean;
+}
+
+type CheckoutAction = 'switch' | 'create' | 'restore';
+
 export class GitCheckoutCommand implements GitSubcommand {
   name = 'checkout';
   description = 'Switch branches or restore working tree files';
-  usage = 'git checkout <branch> | git checkout -b <new-branch> | git checkout -- <file>';
+  usage = 'git checkout [-f] <branch-or-commit> | git checkout (-b | -B) <new-branch> [<start-point>] | git checkout [<tree-ish>] -- <file>...';
 
   private git: Git;
   private fs: JSRuntimeFS;
@@ -26,15 +34,17 @@ export class GitCheckoutCommand implements GitSubcommand {
         return createErrorResult('fatal: not a git repository (or any of the parent directories): .git');
       }
 
-      const { action, target } = this.parseArgs(args);
+      const { action, target, startPoint, filepaths, options } = this.parseArgs(args);
+
+      if (filepaths.length > 0) {
+        return await this.restoreFiles(filepaths, target, cwd);
+      }
 
       switch (action) {
         case 'switch':
-          return await this.switchBranch(target!, cwd);
+          return await this.switchRef(target!, options, cwd);
         case 'create':
-          return await this.createAndSwitchBranch(target!, cwd);
-        case 'restore':
-          return await this.restoreFiles(target!, cwd);
+          return await this.createAndSwitchBranch(target!, startPoint, options, cwd);
         default:
           return createErrorResult('error: pathspec did not match any file(s) known to git');
       }
@@ -45,125 +55,173 @@ export class GitCheckoutCommand implements GitSubcommand {
   }
 
   private parseArgs(args: string[]): {
-    action: 'switch' | 'create' | 'restore';
+    action: CheckoutAction;
     target?: string;
-    options: { createBranch: boolean }
+    startPoint?: string;
+    filepaths: string[];
+    options: CheckoutOptions;
   } {
-    const options = { createBranch: false };
-    let action: 'switch' | 'create' | 'restore' = 'switch';
+    const options: CheckoutOptions = {
+      createBranch: false,
+      createOrReset: false,
+      force: false,
+    };
+    let action: CheckoutAction = 'switch';
     let target: string | undefined;
+    let startPoint: string | undefined;
+    const filepaths: string[] = [];
+    const positionals: string[] = [];
+    let foundDoubleDash = false;
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
 
-      if (arg === '-b') {
+      if (foundDoubleDash) {
+        filepaths.push(arg);
+        continue;
+      }
+
+      if (arg === '--') {
+        foundDoubleDash = true;
+        continue;
+      } else if (arg === '-b') {
         action = 'create';
         options.createBranch = true;
-        if (i + 1 < args.length) {
-          target = args[i + 1];
-          i++;
-        }
-      } else if (arg === '--') {
-        // Everything after -- is a file path
-        if (i + 1 < args.length) {
-          action = 'restore';
-          target = args[i + 1];
-        }
-        break;
+      } else if (arg === '-B') {
+        action = 'create';
+        options.createOrReset = true;
+      } else if (arg === '-f' || arg === '--force') {
+        options.force = true;
       } else if (!arg.startsWith('-')) {
-        if (!target) {
-          target = arg;
-        }
+        positionals.push(arg);
       }
     }
 
-    return { action, target, options };
+    if (action === 'create') {
+      target = positionals[0];
+      if (positionals.length >= 2) {
+        startPoint = positionals[1];
+      }
+    } else {
+      target = positionals[0];
+    }
+
+    return { action, target, startPoint, filepaths, options };
   }
 
-  private async  switchBranch(branchName: string, cwd: string): Promise<ShellCommandResult>  {
+  /**
+   * Switch to a branch or commit.
+   */
+  private async switchRef(ref: string, options: CheckoutOptions, cwd: string): Promise<ShellCommandResult> {
     try {
-      // Check if branch exists
-      const branches = await this.git.listBranches({
-        dir: cwd,
-      });
+      const branches = await this.git.listBranches({ dir: cwd });
+      const isBranch = branches.includes(ref);
 
-      if (!branches.includes(branchName)) {
-        return createErrorResult(`error: pathspec '${branchName}' did not match any file(s) known to git`);
+      // Verify the ref exists (either as a branch or as a commit)
+      if (!isBranch) {
+        try {
+          await this.git.resolveRef({ dir: cwd, ref });
+        } catch {
+          // Try to match as a commit hash
+          if (!/^[a-f0-9]{4,40}$/.test(ref)) {
+            return createErrorResult(`error: pathspec '${ref}' did not match any file(s) known to git`);
+          }
+          try {
+            await this.git.readCommit({ dir: cwd, oid: ref });
+          } catch {
+            return createErrorResult(`error: pathspec '${ref}' did not match any file(s) known to git`);
+          }
+        }
       }
 
       // Get current branch
       let currentBranch: string | null = null;
       try {
-        currentBranch = await this.git.currentBranch({
-          dir: cwd,
-        }) || null;
+        currentBranch = await this.git.currentBranch({ dir: cwd }) || null;
       } catch {
         // Continue
       }
 
-      if (currentBranch === branchName) {
-        return createErrorResult(`Already on '${branchName}'`);
+      if (isBranch && currentBranch === ref) {
+        return createSuccessResult(`Already on '${ref}'\n`);
       }
 
-      // Check for uncommitted changes
-      const statusMatrix = await this.git.statusMatrix({
-        dir: cwd,
-      });
+      // Check for uncommitted changes unless --force
+      if (!options.force) {
+        const statusMatrix = await this.git.statusMatrix({ dir: cwd });
+        const hasChanges = statusMatrix.some(([, headStatus, workdirStatus, stageStatus]) => {
+          // Ignore untracked files
+          if (headStatus === 0 && stageStatus === 0) return false;
+          return headStatus !== workdirStatus || headStatus !== stageStatus;
+        });
 
-      const hasChanges = statusMatrix.some(([, headStatus, workdirStatus, stageStatus]) => {
-        return headStatus !== workdirStatus || headStatus !== stageStatus;
-      });
-
-      if (hasChanges) {
-        return createErrorResult('error: Your local changes to the following files would be overwritten by checkout:\nPlease commit your changes or stash them before you switch branches.');
+        if (hasChanges) {
+          return createErrorResult('error: Your local changes to the following files would be overwritten by checkout:\nPlease commit your changes or stash them before you switch branches.');
+        }
       }
 
-      // Switch to the branch
+      // Switch
       await this.git.checkout({
         dir: cwd,
-        ref: branchName,
+        ref,
+        force: options.force,
       });
 
-      return createSuccessResult(`Switched to branch '${branchName}'\n`);
-
+      if (isBranch) {
+        return createSuccessResult(`Switched to branch '${ref}'\n`);
+      } else {
+        // Detached HEAD
+        return createSuccessResult(`Note: switching to '${ref}'.\n\nYou are in 'detached HEAD' state.\nHEAD is now at ${ref.substring(0, 7)}\n`);
+      }
     } catch (error) {
-      return createErrorResult(`Failed to switch branch: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return createErrorResult(`Failed to switch: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  private async  createAndSwitchBranch(branchName: string, cwd: string): Promise<ShellCommandResult>  {
+  private async createAndSwitchBranch(
+    branchName: string,
+    startPoint: string | undefined,
+    options: CheckoutOptions,
+    cwd: string
+  ): Promise<ShellCommandResult> {
     try {
-      // Check if branch already exists
-      const branches = await this.git.listBranches({
-        dir: cwd,
-      });
+      const branches = await this.git.listBranches({ dir: cwd });
 
       if (branches.includes(branchName)) {
-        return createErrorResult(`fatal: A branch named '${branchName}' already exists.`);
+        if (!options.createOrReset) {
+          return createErrorResult(`fatal: A branch named '${branchName}' already exists.`);
+        }
+        // -B: reset the existing branch
+        try {
+          await this.git.deleteBranch({ dir: cwd, ref: branchName });
+        } catch {
+          // Continue
+        }
       }
 
-      // Get current HEAD
-      let currentRef: string;
+      // Resolve start point
+      let startOid: string;
       try {
-        currentRef = await this.git.resolveRef({
+        startOid = await this.git.resolveRef({
           dir: cwd,
-          ref: 'HEAD',
+          ref: startPoint || 'HEAD',
         });
       } catch {
-        return createErrorResult('fatal: Not a valid object name: \'HEAD\'.');
+        return createErrorResult(`fatal: Not a valid object name: '${startPoint || 'HEAD'}'.`);
       }
 
       // Create the branch
       await this.git.branch({
         dir: cwd,
         ref: branchName,
-        object: currentRef,
+        object: startOid,
       });
 
       // Switch to the new branch
       await this.git.checkout({
         dir: cwd,
         ref: branchName,
+        force: options.force,
       });
 
       return createSuccessResult(`Switched to a new branch '${branchName}'\n`);
@@ -173,29 +231,27 @@ export class GitCheckoutCommand implements GitSubcommand {
     }
   }
 
-  private async  restoreFiles(filePath: string, cwd: string): Promise<ShellCommandResult>  {
+  private async restoreFiles(filepaths: string[], treeish: string | undefined, cwd: string): Promise<ShellCommandResult> {
     try {
-      // This is a simplified implementation
-      // In a full git implementation, this would restore files from the index or HEAD
-
-      // Get the file from HEAD
+      const ref = treeish || 'HEAD';
       try {
         await this.git.checkout({
           dir: cwd,
-          ref: 'HEAD',
-          filepaths: [filePath],
+          ref,
+          filepaths,
+          force: true,
         });
 
         return createSuccessResult('');
       } catch (error) {
         if (error instanceof Error && error.message.includes('does not exist')) {
-          return createErrorResult(`error: pathspec '${filePath}' did not match any file(s) known to git`);
+          return createErrorResult(`error: pathspec did not match any file(s) known to git`);
         }
         throw error;
       }
 
     } catch (error) {
-      return createErrorResult(`Failed to restore file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return createErrorResult(`Failed to restore files: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

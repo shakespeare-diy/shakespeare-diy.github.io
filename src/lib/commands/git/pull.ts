@@ -60,14 +60,17 @@ export class GitPullCommand implements GitSubcommand {
         return createErrorResult(`fatal: '${remote}' does not appear to be a git repository`);
       }
 
-      // Check for uncommitted changes
+      // Check for uncommitted changes (modified or staged).
+      // Untracked files are allowed (real git only blocks if they'd be overwritten).
       const statusMatrix = await this.git.statusMatrix({
         dir: cwd,
       });
 
       const modifiedFiles = statusMatrix
         .filter(([, headStatus, workdirStatus, stageStatus]) => {
-          // Check for any uncommitted changes (modified, staged, or untracked)
+          // Skip untracked files (not in HEAD, not in stage)
+          if (headStatus === 0 && stageStatus === 0) return false;
+          // Report if stage or workdir differs from HEAD
           return headStatus !== workdirStatus || headStatus !== stageStatus;
         })
         .map(([filepath]) => filepath);

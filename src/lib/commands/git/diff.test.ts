@@ -63,7 +63,7 @@ describe('GitDiffCommand', () => {
     type ParseArgsResult = {
       commits: string[];
       paths: string[];
-      options: { cached: boolean; staged: boolean };
+      options: { cached: boolean; nameOnly: boolean; nameStatus: boolean; stat: boolean };
     };
 
     it('should parse no arguments correctly', () => {
@@ -71,7 +71,7 @@ describe('GitDiffCommand', () => {
       expect(result).toEqual({
         commits: [],
         paths: [],
-        options: { cached: false, staged: false },
+        options: { cached: false, nameOnly: false, nameStatus: false, stat: false },
       });
     });
 
@@ -80,8 +80,28 @@ describe('GitDiffCommand', () => {
       expect(result).toEqual({
         commits: [],
         paths: [],
-        options: { cached: true, staged: true },
+        options: { cached: true, nameOnly: false, nameStatus: false, stat: false },
       });
+    });
+
+    it('should parse --staged option as alias for --cached', () => {
+      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['--staged']);
+      expect(result.options.cached).toBe(true);
+    });
+
+    it('should parse --name-only option', () => {
+      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['--name-only']);
+      expect(result.options.nameOnly).toBe(true);
+    });
+
+    it('should parse --name-status option', () => {
+      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['--name-status']);
+      expect(result.options.nameStatus).toBe(true);
+    });
+
+    it('should parse --stat option', () => {
+      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['--stat']);
+      expect(result.options.stat).toBe(true);
     });
 
     it('should parse commits and paths', () => {
@@ -89,8 +109,13 @@ describe('GitDiffCommand', () => {
       expect(result).toEqual({
         commits: ['HEAD~1', 'HEAD'],
         paths: ['file.txt'],
-        options: { cached: false, staged: false },
+        options: { cached: false, nameOnly: false, nameStatus: false, stat: false },
       });
+    });
+
+    it('should parse range syntax commit1..commit2', () => {
+      const result = (command as unknown as { parseArgs: (args: string[]) => ParseArgsResult }).parseArgs(['HEAD~2..HEAD']);
+      expect(result.commits).toEqual(['HEAD~2', 'HEAD']);
     });
   });
 

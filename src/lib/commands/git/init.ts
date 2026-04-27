@@ -7,7 +7,7 @@ import type { Git } from "../../git";
 export class GitInitCommand implements GitSubcommand {
   name = 'init';
   description = 'Create an empty Git repository or reinitialize an existing one';
-  usage = 'git init [--bare] [<directory>]';
+  usage = 'git init [--bare] [-b | --initial-branch <name>] [<directory>]';
 
   private git: Git;
   private fs: JSRuntimeFS;
@@ -21,7 +21,9 @@ export class GitInitCommand implements GitSubcommand {
     try {
       // Parse arguments
       const { options, directory } = this.parseArgs(args);
-      const targetDir = directory || cwd;
+      const targetDir = directory
+        ? (directory.startsWith('/') ? directory : `${cwd}/${directory}`)
+        : cwd;
 
       // Check if directory exists, create if needed
       if (directory) {
@@ -45,21 +47,25 @@ export class GitInitCommand implements GitSubcommand {
       await this.git.init({
         dir: targetDir,
         bare: options.bare,
-        defaultBranch: 'main'
+        defaultBranch: options.initialBranch || 'main',
       });
 
       // Set up basic configuration
-      await this.git.setConfig({
-        dir: targetDir,
-        path: 'user.name',
-        value: 'shakespeare.diy'
-      });
+      try {
+        await this.git.setConfig({
+          dir: targetDir,
+          path: 'user.name',
+          value: 'shakespeare.diy',
+        });
 
-      await this.git.setConfig({
-        dir: targetDir,
-        path: 'user.email',
-        value: 'assistant@shakespeare.diy'
-      });
+        await this.git.setConfig({
+          dir: targetDir,
+          path: 'user.email',
+          value: 'assistant@shakespeare.diy',
+        });
+      } catch {
+        // Non-fatal
+      }
 
       const message = options.bare
         ? `Initialized empty Git repository in ${targetDir}/\n`
@@ -72,13 +78,25 @@ export class GitInitCommand implements GitSubcommand {
     }
   }
 
-  private parseArgs(args: string[]): { options: { bare: boolean }; directory?: string } {
-    const options = { bare: false };
+  private parseArgs(args: string[]): {
+    options: { bare: boolean; initialBranch?: string };
+    directory?: string;
+  } {
+    const options: { bare: boolean; initialBranch?: string } = { bare: false };
     let directory: string | undefined;
 
-    for (const arg of args) {
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
       if (arg === '--bare') {
         options.bare = true;
+      } else if (arg === '-b' || arg === '--initial-branch') {
+        if (i + 1 < args.length) {
+          options.initialBranch = args[i + 1];
+          i++;
+        }
+      } else if (arg.startsWith('--initial-branch=')) {
+        options.initialBranch = arg.substring(17);
       } else if (!arg.startsWith('-')) {
         directory = arg;
       }

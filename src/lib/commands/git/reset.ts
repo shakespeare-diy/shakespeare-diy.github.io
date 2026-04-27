@@ -27,7 +27,7 @@ export class GitResetCommand implements GitSubcommand {
         return createErrorResult('fatal: not a git repository (or any of the parent directories): .git');
       }
 
-      const { mode, target, files, isFileReset } = this.parseArgs(args);
+      const { mode, target, files, isFileReset } = await this.parseArgs(args, cwd);
 
       if (isFileReset) {
         // Reset specific files or all files (unstage)
@@ -42,18 +42,20 @@ export class GitResetCommand implements GitSubcommand {
     }
   }
 
-  private parseArgs(args: string[]): {
+  private async parseArgs(args: string[], cwd: string): Promise<{
     mode: 'soft' | 'mixed' | 'hard';
     target: string;
     files: string[];
     isFileReset: boolean;
-  } {
+  }> {
     let mode: 'soft' | 'mixed' | 'hard' = 'mixed'; // Default mode
     let target = 'HEAD'; // Default target
     const files: string[] = [];
     let foundTarget = false;
     let hasMode = false;
 
+    // First pass: identify mode flags
+    const nonFlagArgs: string[] = [];
     for (const arg of args) {
       if (arg === '--soft') {
         mode = 'soft';
@@ -65,12 +67,17 @@ export class GitResetCommand implements GitSubcommand {
         mode = 'hard';
         hasMode = true;
       } else if (!arg.startsWith('-')) {
-        if (!foundTarget && (arg === 'HEAD' || arg.match(/^[a-f0-9]{7,40}$/) || arg.match(/^HEAD[~^]\d*$/))) {
-          target = arg;
-          foundTarget = true;
-        } else {
-          files.push(arg);
-        }
+        nonFlagArgs.push(arg);
+      }
+    }
+
+    // Second pass: first non-flag arg may be a ref. Check if it resolves.
+    for (const arg of nonFlagArgs) {
+      if (!foundTarget && await this.isLikelyRef(arg, cwd)) {
+        target = arg;
+        foundTarget = true;
+      } else {
+        files.push(arg);
       }
     }
 
@@ -82,9 +89,28 @@ export class GitResetCommand implements GitSubcommand {
     // git reset --mode <commit> = reset to commit with mode
     const isFileReset = (args.length === 0) ||
                        (target === 'HEAD' && !hasMode && files.length === 0) ||
-                       (files.length > 0);
+                       (target === 'HEAD' && !hasMode && files.length > 0) ||
+                       (!foundTarget && files.length > 0);
 
     return { mode, target, files, isFileReset };
+  }
+
+  /**
+   * Check if a string looks like (and resolves as) a git ref.
+   */
+  private async isLikelyRef(arg: string, cwd: string): Promise<boolean> {
+    // Common ref patterns
+    if (arg === 'HEAD') return true;
+    if (/^HEAD[~^]\d*$/.test(arg)) return true;
+    if (/^[a-f0-9]{7,40}$/.test(arg)) return true;
+
+    // Try to resolve as a ref
+    try {
+      await this.git.resolveRef({ dir: cwd, ref: arg });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async  resetFiles(files: string[], cwd: string): Promise<ShellCommandResult>  {
@@ -190,8 +216,38 @@ export class GitResetCommand implements GitSubcommand {
       switch (mode) {
         case 'soft':
           // Move HEAD only (keep staging area and working directory)
-          // This is complex to implement with isomorphic-git
-          return createErrorResult('--soft reset is not implemented in this git command');
+          try {
+            let currentBranch: string | null = null;
+            try {
+              currentBranch = await this.git.currentBranch({
+                dir: cwd,
+              }) || null;
+            } catch {
+              // Detached HEAD state
+            }
+
+            if (currentOid !== targetOid) {
+              if (currentBranch) {
+                await this.git.writeRef({
+                  dir: cwd,
+                  ref: `refs/heads/${currentBranch}`,
+                  value: targetOid,
+                  force: true,
+                });
+              } else {
+                await this.git.writeRef({
+                  dir: cwd,
+                  ref: 'HEAD',
+                  value: targetOid,
+                  force: true,
+                });
+              }
+            }
+
+            return createSuccessResult(`HEAD is now at ${targetOid.substring(0, 7)}\n`);
+          } catch (error) {
+            return createErrorResult(`Failed to soft reset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
 
         case 'mixed':
           // Move HEAD and reset staging area (default)

@@ -26,7 +26,7 @@ export class GitShowCommand implements GitSubcommand {
         return createErrorResult('fatal: not a git repository (or any of the parent directories): .git');
       }
 
-      const { commit } = this.parseArgs(args);
+      const { commit, options } = this.parseArgs(args);
 
       // Resolve the commit reference (handling relative refs like HEAD~1)
       const resolvedCommit = await this.resolveCommitRef(commit, cwd);
@@ -34,24 +34,33 @@ export class GitShowCommand implements GitSubcommand {
         return createErrorResult(`fatal: bad revision '${commit}'`);
       }
 
-      return await this.showCommit(resolvedCommit, cwd);
+      return await this.showCommit(resolvedCommit, cwd, options);
 
     } catch (error) {
       return createErrorResult(`git show: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  private parseArgs(args: string[]): { commit: string } {
+  private parseArgs(args: string[]): {
+    commit: string;
+    options: { stat: boolean; nameOnly: boolean; nameStatus: boolean };
+  } {
     let commit = 'HEAD'; // Default to HEAD
+    const options = { stat: false, nameOnly: false, nameStatus: false };
 
     for (const arg of args) {
-      if (!arg.startsWith('-')) {
+      if (arg === '--stat') {
+        options.stat = true;
+      } else if (arg === '--name-only') {
+        options.nameOnly = true;
+      } else if (arg === '--name-status') {
+        options.nameStatus = true;
+      } else if (!arg.startsWith('-')) {
         commit = arg;
-        break;
       }
     }
 
-    return { commit };
+    return { commit, options };
   }
 
   /**
@@ -173,7 +182,64 @@ export class GitShowCommand implements GitSubcommand {
     }
   }
 
-  private async  showCommit(commitRef: string, cwd: string): Promise<ShellCommandResult>  {
+  /**
+   * Compute file changes between a commit and its parent.
+   */
+  private async computeChangesFromCommit(
+    commitOid: string,
+    parentOid: string | undefined,
+    cwd: string,
+  ): Promise<Array<{ type: 'add' | 'modify' | 'delete'; path: string }>> {
+    const changes: Array<{ type: 'add' | 'modify' | 'delete'; path: string }> = [];
+
+    const walk = async (oid: string): Promise<Map<string, string>> => {
+      const files = new Map<string, string>();
+      const walkTree = async (treeOid: string, prefix: string): Promise<void> => {
+        try {
+          const tree = await this.git.readTree({ dir: cwd, oid: treeOid });
+          for (const entry of tree.tree as Array<{ mode: string; path: string; oid: string; type?: string }>) {
+            const path = prefix ? `${prefix}/${entry.path}` : entry.path;
+            if (entry.mode === '040000' || entry.type === 'tree') {
+              await walkTree(entry.oid, path);
+            } else {
+              files.set(path, entry.oid);
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      };
+      await walkTree(oid, '');
+      return files;
+    };
+
+    const currentFiles = await walk(commitOid);
+
+    if (!parentOid) {
+      for (const path of currentFiles.keys()) {
+        changes.push({ type: 'add', path });
+      }
+    } else {
+      const parentFiles = await walk(parentOid);
+      for (const [path, oid] of currentFiles) {
+        const parentOidForFile = parentFiles.get(path);
+        if (!parentOidForFile) {
+          changes.push({ type: 'add', path });
+        } else if (parentOidForFile !== oid) {
+          changes.push({ type: 'modify', path });
+        }
+      }
+      for (const path of parentFiles.keys()) {
+        if (!currentFiles.has(path)) {
+          changes.push({ type: 'delete', path });
+        }
+      }
+    }
+
+    return changes.sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  private async  showCommit(commitRef: string, cwd: string, options: { stat: boolean; nameOnly: boolean; nameStatus: boolean } = { stat: false, nameOnly: false, nameStatus: false }): Promise<ShellCommandResult>  {
     try {
       // Get the commit
       const commits = await this.git.log({
@@ -187,6 +253,41 @@ export class GitShowCommand implements GitSubcommand {
       }
 
       const commit = commits[0];
+
+      // Handle --name-only / --name-status / --stat with a compact output
+      if (options.nameOnly || options.nameStatus || options.stat) {
+        const lines: string[] = [];
+        const changes = await this.computeChangesFromCommit(commit.oid, commit.commit.parent?.[0], cwd);
+        if (options.nameOnly) {
+          for (const c of changes) lines.push(c.path);
+        } else if (options.nameStatus) {
+          for (const c of changes) {
+            const status = c.type === 'add' ? 'A' : c.type === 'delete' ? 'D' : 'M';
+            lines.push(`${status}\t${c.path}`);
+          }
+        } else {
+          // --stat: show commit metadata + file list
+          lines.push(`commit ${commit.oid}`);
+          lines.push(`Author: ${commit.commit.author.name} <${commit.commit.author.email}>`);
+          lines.push(`Date:   ${new Date(commit.commit.author.timestamp * 1000).toUTCString()}`);
+          lines.push('');
+          for (const messageLine of commit.commit.message.split('\n')) {
+            lines.push(`    ${messageLine}`);
+          }
+          lines.push('');
+          const maxLen = Math.max(10, ...changes.map(c => c.path.length));
+          let added = 0, deleted = 0;
+          for (const c of changes) {
+            const bar = c.type === 'add' ? '+' : c.type === 'delete' ? '-' : 'M';
+            lines.push(` ${c.path.padEnd(maxLen)} | ${bar}`);
+            if (c.type === 'add') added++;
+            else if (c.type === 'delete') deleted++;
+          }
+          lines.push(` ${changes.length} file${changes.length !== 1 ? 's' : ''} changed, ${added} insertion${added !== 1 ? 's' : ''}(+), ${deleted} deletion${deleted !== 1 ? 's' : ''}(-)`);
+        }
+        return createSuccessResult(lines.join('\n') + '\n');
+      }
+
       const lines: string[] = [];
 
       // Show commit information

@@ -7,7 +7,7 @@ import type { Git } from "../../git";
 export class GitCommitCommand implements GitSubcommand {
   name = 'commit';
   description = 'Record changes to the repository';
-  usage = 'git commit [-m <msg>] [-a | --all] [-am <msg>] [--amend] [--allow-empty]';
+  usage = 'git commit [-m <msg>] [-a | --all] [-am <msg>] [--amend] [--allow-empty] [--signoff] [-F <file>] [--author=<author>] [-C <commit>] [--no-verify]';
 
   private git: Git;
   private fs: JSRuntimeFS;
@@ -26,12 +26,12 @@ export class GitCommitCommand implements GitSubcommand {
         return createErrorResult('fatal: not a git repository (or any of the parent directories): .git');
       }
 
-      const { options, message } = this.parseArgs(args);
+      const { options, message } = await this.parseArgs(args, cwd);
 
-      if (!message && !options.amend) {
+      if (!message && !options.amend && !options.reuseMessage) {
         return createErrorResult('Aborting commit due to empty commit message.');
       }
-      
+
       // If -a flag is provided, stage all tracked files with modifications
       if (options.addAll) {
         await this.stageTrackedChanges(cwd);
@@ -52,13 +52,17 @@ export class GitCommitCommand implements GitSubcommand {
       }
 
       let commitMessage = message;
-      if (options.amend) {
-        // Get the last commit message if amending
+      if (options.amend || options.reuseMessage) {
+        // Get the last commit message if amending or reusing
         try {
-          const commits = await this.git.log({
+          const logOpts: { dir: string; depth: number; ref?: string } = {
             dir: cwd,
             depth: 1,
-          });
+          };
+          if (options.reuseMessage) {
+            logOpts.ref = options.reuseMessage;
+          }
+          const commits = await this.git.log(logOpts);
           if (commits.length > 0 && !message) {
             commitMessage = commits[0].commit.message;
           }
@@ -67,6 +71,14 @@ export class GitCommitCommand implements GitSubcommand {
           if (!commitMessage) {
             commitMessage = 'Amended commit';
           }
+        }
+      }
+
+      // Append sign-off if requested
+      if (options.signoff && commitMessage) {
+        const signoff = await this.buildSignoff(cwd, options.author);
+        if (signoff && !commitMessage.includes(signoff)) {
+          commitMessage = commitMessage.replace(/\n+$/, '') + `\n\nSigned-off-by: ${signoff}\n`;
         }
       }
 
@@ -85,10 +97,18 @@ export class GitCommitCommand implements GitSubcommand {
         dir: string;
         message: string;
         parent?: string[];
+        author?: { name: string; email: string };
       } = {
         dir: cwd,
         message: commitMessage || 'Empty commit',
       };
+
+      if (options.author) {
+        const parsed = this.parseAuthor(options.author);
+        if (parsed) {
+          commitOptions.author = parsed;
+        }
+      }
 
       if (options.amend) {
         // For amend, we need to reset to the parent of the current commit
@@ -110,13 +130,13 @@ export class GitCommitCommand implements GitSubcommand {
       // Get short hash
       const shortHash = commitSha.substring(0, 7);
 
-      // Count changes
+      // Count changes (status matrix values: 0=absent, 1=unchanged from HEAD, 2=differs from HEAD)
       const addedFiles = stagedFiles.filter(([, headStatus, , stageStatus]) =>
-        headStatus === 0 && stageStatus === 1
+        headStatus === 0 && stageStatus === 2
       ).length;
 
       const modifiedFiles = stagedFiles.filter(([, headStatus, , stageStatus]) =>
-        headStatus === 1 && stageStatus === 1
+        headStatus === 1 && stageStatus === 2
       ).length;
 
       const deletedFiles = stagedFiles.filter(([, headStatus, , stageStatus]) =>
@@ -178,40 +198,142 @@ export class GitCommitCommand implements GitSubcommand {
     }
   }
 
-  private parseArgs(args: string[]): {
-    options: { amend: boolean; allowEmpty: boolean; addAll: boolean };
-    message?: string
-  } {
-    const options = { amend: false, allowEmpty: false, addAll: false };
-    let message: string | undefined;
+  private async parseArgs(args: string[], cwd: string): Promise<{
+    options: {
+      amend: boolean;
+      allowEmpty: boolean;
+      addAll: boolean;
+      signoff: boolean;
+      noVerify: boolean;
+      author?: string;
+      reuseMessage?: string;
+    };
+    message?: string;
+  }> {
+    const options: {
+      amend: boolean;
+      allowEmpty: boolean;
+      addAll: boolean;
+      signoff: boolean;
+      noVerify: boolean;
+      author?: string;
+      reuseMessage?: string;
+    } = {
+      amend: false,
+      allowEmpty: false,
+      addAll: false,
+      signoff: false,
+      noVerify: false,
+    };
+    const messageParts: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
 
       if (arg === '-m' || arg === '--message') {
         if (i + 1 < args.length) {
-          message = args[i + 1];
+          messageParts.push(args[i + 1]);
           i++; // Skip next argument as it's the message
         }
       } else if (arg.startsWith('-m=')) {
-        message = arg.substring(3);
+        messageParts.push(arg.substring(3));
       } else if (arg.startsWith('--message=')) {
-        message = arg.substring(10);
+        messageParts.push(arg.substring(10));
+      } else if (arg === '-F' || arg === '--file') {
+        if (i + 1 < args.length) {
+          const filePath = args[i + 1];
+          try {
+            const content = await this.fs.readFile(
+              filePath.startsWith('/') ? filePath : `${cwd}/${filePath}`,
+              'utf8'
+            );
+            messageParts.push(content.replace(/\n+$/, ''));
+          } catch {
+            // Ignore if file can't be read
+          }
+          i++;
+        }
+      } else if (arg.startsWith('--file=')) {
+        const filePath = arg.substring(7);
+        try {
+          const content = await this.fs.readFile(
+            filePath.startsWith('/') ? filePath : `${cwd}/${filePath}`,
+            'utf8'
+          );
+          messageParts.push(content.replace(/\n+$/, ''));
+        } catch {
+          // Ignore
+        }
       } else if (arg === '--amend') {
         options.amend = true;
       } else if (arg === '--allow-empty') {
         options.allowEmpty = true;
       } else if (arg === '-a' || arg === '--all') {
         options.addAll = true;
-      } else if (arg === '-am') {
+      } else if (arg === '-am' || arg === '-ma') {
         options.addAll = true;
         if (i + 1 < args.length) {
-          message = args[i + 1];
-          i++; // Skip next argument as it's the message
+          messageParts.push(args[i + 1]);
+          i++;
         }
+      } else if (arg === '-s' || arg === '--signoff') {
+        options.signoff = true;
+      } else if (arg === '--no-verify' || arg === '-n') {
+        // --no-verify skips pre-commit / commit-msg hooks; we don't run hooks anyway
+        options.noVerify = true;
+      } else if (arg === '--author') {
+        if (i + 1 < args.length) {
+          options.author = args[i + 1];
+          i++;
+        }
+      } else if (arg.startsWith('--author=')) {
+        options.author = arg.substring(9);
+      } else if (arg === '-C' || arg === '--reuse-message') {
+        if (i + 1 < args.length) {
+          options.reuseMessage = args[i + 1];
+          i++;
+        }
+      } else if (arg.startsWith('--reuse-message=')) {
+        options.reuseMessage = arg.substring(16);
       }
     }
 
+    // Multiple -m flags are joined with double newlines (standard git behavior)
+    const message = messageParts.length > 0 ? messageParts.join('\n\n') : undefined;
+
     return { options, message };
+  }
+
+  /**
+   * Parse an author string like "Name <email@example.com>"
+   */
+  private parseAuthor(author: string): { name: string; email: string } | null {
+    const match = author.match(/^(.+?)\s*<(.+?)>\s*$/);
+    if (match) {
+      return { name: match[1].trim(), email: match[2].trim() };
+    }
+    return null;
+  }
+
+  /**
+   * Build a Signed-off-by line from the current user config or the provided author
+   */
+  private async buildSignoff(cwd: string, authorOverride?: string): Promise<string | null> {
+    if (authorOverride) {
+      const parsed = this.parseAuthor(authorOverride);
+      if (parsed) {
+        return `${parsed.name} <${parsed.email}>`;
+      }
+    }
+    try {
+      const name = await this.git.getConfig({ dir: cwd, path: 'user.name' });
+      const email = await this.git.getConfig({ dir: cwd, path: 'user.email' });
+      if (name && email) {
+        return `${name} <${email}>`;
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
   }
 }

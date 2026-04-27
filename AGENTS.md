@@ -67,7 +67,7 @@ Shakespeare provides a comprehensive set of shell commands that are JavaScript r
 - **File Operations**: `cat`, `cp`, `mv`, `rm`, `touch`, `find`, `grep`
 - **Directory Operations**: `cd`, `ls`, `mkdir`, `pwd`, `tree`
 - **System Commands**: `echo`, `which`, `wc`, `head`, `tail`
-- **Git Commands**: `git add`, `git commit`, `git push`, `git pull`, `git status`, `git log`, etc.
+- **Git Commands**: `git add`, `git commit`, `git push`, `git pull`, `git status`, `git log`, `git diff`, `git branch`, `git checkout`, `git switch`, `git merge`, `git revert`, `git rm`, `git mv`, `git restore`, `git rev-parse`, `git ls-files`, `git tag`, `git stash`, `git fetch`, `git clone`, `git init`, `git reset`, `git show`, `git remote`, `git config`
 
 #### Security
 

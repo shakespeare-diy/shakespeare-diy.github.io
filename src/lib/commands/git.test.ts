@@ -115,7 +115,8 @@ describe('GitCommand', () => {
   it('should register all expected subcommands', () => {
     const expectedSubcommands = [
       'init', 'status', 'add', 'commit', 'log', 'branch', 'checkout',
-      'remote', 'push', 'pull', 'clone', 'config', 'reset', 'diff', 'tag', 'show'
+      'remote', 'push', 'pull', 'clone', 'config', 'reset', 'diff', 'tag', 'show',
+      'stash', 'rm', 'mv', 'restore', 'switch', 'merge', 'revert', 'rev-parse', 'ls-files',
     ];
 
     // We can't directly access the subcommands map, but we can test that they work

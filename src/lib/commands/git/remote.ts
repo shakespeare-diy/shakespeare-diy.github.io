@@ -1,14 +1,15 @@
-
 import type { JSRuntimeFS } from "../../JSRuntime";
 import type { ShellCommandResult } from "../ShellCommand";
 import { createSuccessResult, createErrorResult } from "../ShellCommand";
 import type { GitSubcommand, GitSubcommandOptions } from "../git";
 import type { Git } from "../../git";
 
+type RemoteAction = 'list' | 'add' | 'remove' | 'set-url' | 'get-url' | 'rename' | 'show';
+
 export class GitRemoteCommand implements GitSubcommand {
   name = 'remote';
   description = 'Manage set of tracked repositories';
-  usage = 'git remote [-v] | git remote add <name> <url> | git remote remove <name>';
+  usage = 'git remote [-v] | git remote add <name> <url> | git remote remove <name> | git remote set-url <name> <url> | git remote get-url <name> | git remote rename <old> <new> | git remote show <name>';
 
   private git: Git;
   private fs: JSRuntimeFS;
@@ -27,7 +28,7 @@ export class GitRemoteCommand implements GitSubcommand {
         return createErrorResult('fatal: not a git repository (or any of the parent directories): .git');
       }
 
-      const { action, name, url, options } = this.parseArgs(args);
+      const { action, name, url, newName, options } = this.parseArgs(args);
 
       switch (action) {
         case 'list':
@@ -36,6 +37,14 @@ export class GitRemoteCommand implements GitSubcommand {
           return await this.addRemote(name!, url!, cwd);
         case 'remove':
           return await this.removeRemote(name!, cwd);
+        case 'set-url':
+          return await this.setRemoteUrl(name!, url!, cwd);
+        case 'get-url':
+          return await this.getRemoteUrl(name!, cwd);
+        case 'rename':
+          return await this.renameRemote(name!, newName!, cwd);
+        case 'show':
+          return await this.showRemote(name!, cwd);
         default:
           return await this.listRemotes(options.verbose, cwd);
       }
@@ -46,15 +55,17 @@ export class GitRemoteCommand implements GitSubcommand {
   }
 
   private parseArgs(args: string[]): {
-    action: 'list' | 'add' | 'remove';
+    action: RemoteAction;
     name?: string;
     url?: string;
-    options: { verbose: boolean }
+    newName?: string;
+    options: { verbose: boolean };
   } {
     const options = { verbose: false };
-    let action: 'list' | 'add' | 'remove' = 'list';
+    let action: RemoteAction = 'list';
     let name: string | undefined;
     let url: string | undefined;
+    let newName: string | undefined;
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
@@ -63,31 +74,34 @@ export class GitRemoteCommand implements GitSubcommand {
         options.verbose = true;
       } else if (arg === 'add') {
         action = 'add';
-        if (i + 1 < args.length) {
-          name = args[i + 1];
-          i++;
-        }
-        if (i + 1 < args.length) {
-          url = args[i + 1];
-          i++;
-        }
+        if (i + 1 < args.length) { name = args[i + 1]; i++; }
+        if (i + 1 < args.length) { url = args[i + 1]; i++; }
       } else if (arg === 'remove' || arg === 'rm') {
         action = 'remove';
-        if (i + 1 < args.length) {
-          name = args[i + 1];
-          i++;
-        }
+        if (i + 1 < args.length) { name = args[i + 1]; i++; }
+      } else if (arg === 'set-url') {
+        action = 'set-url';
+        if (i + 1 < args.length) { name = args[i + 1]; i++; }
+        if (i + 1 < args.length) { url = args[i + 1]; i++; }
+      } else if (arg === 'get-url') {
+        action = 'get-url';
+        if (i + 1 < args.length) { name = args[i + 1]; i++; }
+      } else if (arg === 'rename') {
+        action = 'rename';
+        if (i + 1 < args.length) { name = args[i + 1]; i++; }
+        if (i + 1 < args.length) { newName = args[i + 1]; i++; }
+      } else if (arg === 'show') {
+        action = 'show';
+        if (i + 1 < args.length) { name = args[i + 1]; i++; }
       }
     }
 
-    return { action, name, url, options };
+    return { action, name, url, newName, options };
   }
 
-  private async  listRemotes(verbose: boolean, cwd: string): Promise<ShellCommandResult>  {
+  private async listRemotes(verbose: boolean, cwd: string): Promise<ShellCommandResult> {
     try {
-      const remotes = await this.git.listRemotes({
-        dir: cwd,
-      });
+      const remotes = await this.git.listRemotes({ dir: cwd });
 
       if (remotes.length === 0) {
         return createSuccessResult('');
@@ -113,33 +127,22 @@ export class GitRemoteCommand implements GitSubcommand {
     }
   }
 
-  private async  addRemote(name: string, url: string, cwd: string): Promise<ShellCommandResult>  {
+  private async addRemote(name: string, url: string, cwd: string): Promise<ShellCommandResult> {
     try {
       if (!name || !url) {
         return createErrorResult('usage: git remote add <name> <url>');
       }
 
-      // Check if remote already exists
       try {
-        const remotes = await this.git.listRemotes({
-          
-          dir: cwd,
-        });
-
-        const existingRemote = remotes.find(r => r.remote === name);
-        if (existingRemote) {
+        const remotes = await this.git.listRemotes({ dir: cwd });
+        if (remotes.find(r => r.remote === name)) {
           return createErrorResult(`fatal: remote ${name} already exists.`);
         }
       } catch {
-        // Continue if we can't list remotes
+        // Continue
       }
 
-      // Add the remote
-      await this.git.addRemote({
-        dir: cwd,
-        remote: name,
-        url: url,
-      });
+      await this.git.addRemote({ dir: cwd, remote: name, url });
 
       return createSuccessResult('');
 
@@ -148,37 +151,118 @@ export class GitRemoteCommand implements GitSubcommand {
     }
   }
 
-  private async  removeRemote(name: string, cwd: string): Promise<ShellCommandResult>  {
+  private async removeRemote(name: string, cwd: string): Promise<ShellCommandResult> {
     try {
       if (!name) {
         return createErrorResult('usage: git remote remove <name>');
       }
 
-      // Check if remote exists
       try {
-        const remotes = await this.git.listRemotes({
-          
-          dir: cwd,
-        });
-
-        const existingRemote = remotes.find(r => r.remote === name);
-        if (!existingRemote) {
+        const remotes = await this.git.listRemotes({ dir: cwd });
+        if (!remotes.find(r => r.remote === name)) {
           return createErrorResult(`fatal: No such remote: ${name}`);
         }
       } catch {
         return createErrorResult(`fatal: No such remote: ${name}`);
       }
 
-      // Remove the remote
-      await this.git.deleteRemote({
-        dir: cwd,
-        remote: name,
-      });
+      await this.git.deleteRemote({ dir: cwd, remote: name });
 
       return createSuccessResult('');
 
     } catch (error) {
       return createErrorResult(`Failed to remove remote: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async setRemoteUrl(name: string, url: string, cwd: string): Promise<ShellCommandResult> {
+    try {
+      if (!name || !url) {
+        return createErrorResult('usage: git remote set-url <name> <url>');
+      }
+
+      try {
+        const remotes = await this.git.listRemotes({ dir: cwd });
+        if (!remotes.find(r => r.remote === name)) {
+          return createErrorResult(`fatal: No such remote '${name}'`);
+        }
+      } catch {
+        return createErrorResult(`fatal: No such remote '${name}'`);
+      }
+
+      // setRemoteURL is implemented in the Git wrapper
+      await this.git.setRemoteURL({ dir: cwd, remote: name, url });
+
+      return createSuccessResult('');
+
+    } catch (error) {
+      return createErrorResult(`Failed to set remote URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async getRemoteUrl(name: string, cwd: string): Promise<ShellCommandResult> {
+    try {
+      if (!name) {
+        return createErrorResult('usage: git remote get-url <name>');
+      }
+
+      const url = await this.git.getRemoteURL(cwd, name);
+      if (!url) {
+        return createErrorResult(`fatal: No such remote '${name}'`);
+      }
+
+      return createSuccessResult(url + '\n');
+
+    } catch (error) {
+      return createErrorResult(`Failed to get remote URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async renameRemote(oldName: string, newName: string, cwd: string): Promise<ShellCommandResult> {
+    try {
+      if (!oldName || !newName) {
+        return createErrorResult('usage: git remote rename <old> <new>');
+      }
+
+      const remotes = await this.git.listRemotes({ dir: cwd });
+      const oldRemote = remotes.find(r => r.remote === oldName);
+      if (!oldRemote) {
+        return createErrorResult(`fatal: No such remote '${oldName}'`);
+      }
+      if (remotes.find(r => r.remote === newName)) {
+        return createErrorResult(`fatal: remote ${newName} already exists.`);
+      }
+
+      // isomorphic-git has no rename: delete + re-add
+      await this.git.deleteRemote({ dir: cwd, remote: oldName });
+      await this.git.addRemote({ dir: cwd, remote: newName, url: oldRemote.url });
+
+      return createSuccessResult('');
+    } catch (error) {
+      return createErrorResult(`Failed to rename remote: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async showRemote(name: string, cwd: string): Promise<ShellCommandResult> {
+    try {
+      if (!name) {
+        return createErrorResult('usage: git remote show <name>');
+      }
+
+      const remotes = await this.git.listRemotes({ dir: cwd });
+      const remote = remotes.find(r => r.remote === name);
+      if (!remote) {
+        return createErrorResult(`fatal: No such remote '${name}'`);
+      }
+
+      const lines: string[] = [];
+      lines.push(`* remote ${name}`);
+      lines.push(`  Fetch URL: ${remote.url}`);
+      lines.push(`  Push  URL: ${remote.url}`);
+
+      return createSuccessResult(lines.join('\n') + '\n');
+    } catch (error) {
+      return createErrorResult(`Failed to show remote: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

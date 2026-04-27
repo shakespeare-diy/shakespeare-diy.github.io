@@ -23,6 +23,14 @@ import { GitDiffCommand } from "./git/diff";
 import { GitTagCommand } from "./git/tag";
 import { GitShowCommand } from "./git/show";
 import { GitStashCommand } from "./git/stash";
+import { GitRmCommand } from "./git/rm";
+import { GitMvCommand } from "./git/mv";
+import { GitRestoreCommand } from "./git/restore";
+import { GitSwitchCommand } from "./git/switch";
+import { GitMergeCommand } from "./git/merge";
+import { GitRevertCommand } from "./git/revert";
+import { GitRevParseCommand } from "./git/rev-parse";
+import { GitLsFilesCommand } from "./git/ls-files";
 
 export interface GitSubcommand {
   name: string;
@@ -91,6 +99,14 @@ export class GitCommand implements ShellCommand {
     this.registerSubcommand(new GitTagCommand(subcommandOptions));
     this.registerSubcommand(new GitShowCommand(subcommandOptions));
     this.registerSubcommand(new GitStashCommand(subcommandOptions));
+    this.registerSubcommand(new GitRmCommand(subcommandOptions));
+    this.registerSubcommand(new GitMvCommand(subcommandOptions));
+    this.registerSubcommand(new GitRestoreCommand(subcommandOptions));
+    this.registerSubcommand(new GitSwitchCommand(subcommandOptions));
+    this.registerSubcommand(new GitMergeCommand(subcommandOptions));
+    this.registerSubcommand(new GitRevertCommand(subcommandOptions));
+    this.registerSubcommand(new GitRevParseCommand(subcommandOptions));
+    this.registerSubcommand(new GitLsFilesCommand(subcommandOptions));
   }
 
   private registerSubcommand(subcommand: GitSubcommand): void {
@@ -138,11 +154,15 @@ start a working area (see also: git help tutorial)
 
 work on the current change (see also: git help everyday)
    add        Add file contents to the index
+   mv         Move or rename a file, a directory, or a symlink
+   restore    Restore working tree files
+   rm         Remove files from the working tree and from the index
    reset      Reset current HEAD to the specified state
    stash      Stash the changes in a dirty working directory away
 
 examine the history and state (see also: git help revisions)
    log        Show commit logs
+   ls-files   Show information about files in the index and the working tree
    show       Show various types of objects
    status     Show the working tree status
    diff       Show changes between commits, commit and working tree, etc
@@ -151,6 +171,10 @@ grow, mark and tweak your common history
    branch     List, create, or delete branches
    checkout   Switch branches or restore working tree files
    commit     Record changes to the repository
+   merge      Join two or more development histories together
+   rebase     Reapply commits on top of another base tip (not implemented)
+   revert     Revert some existing commits
+   switch     Switch branches
    tag        Create, list, delete or verify a tag object
 
 collaborate (see also: git help workflows)
@@ -159,8 +183,9 @@ collaborate (see also: git help workflows)
    push       Update remote refs along with associated objects
    remote     Manage set of tracked repositories
 
-configuration
+configuration and low-level
    config     Get and set repository or global options
+   rev-parse  Pick out and massage parameters
 
 'git help -a' and 'git help -g' list available subcommands and some
 concept guides. See 'git help <command>' or 'git help <concept>'
