@@ -255,14 +255,22 @@ export function esmPlugin(options: EsmPluginOptions): Plugin {
           ? path.split("/").slice(0, 2).join("/")
           : path.split("/")[0];
 
-        // If the importer is CSS, ignore (no JS deps)
-        try {
-          const { pathname } = new URL(args.importer);
-          if (/\.css$/.test(pathname)) {
-            return; // CSS imports don't have external dependencies
-          }
-        } catch {
-          // not a URL; continue
+        // When the importer is a CSS file, treat `@import "tailwindcss"`
+        // and its subpaths (`tailwindcss/preflight`, `/theme`, `/utilities`)
+        // as external so the Tailwind v4 `@tailwindcss/browser` runtime can
+        // process them at runtime (the v4 runtime special-cases these and
+        // rejects all other `@import` specifiers). Any other bare CSS
+        // `@import` falls through to the normal CDN resolution below, which
+        // will load the dependency as CSS content and bundle it inline
+        // (esm.sh redirects bare package specifiers for CSS-only packages
+        // to their `.css` entry, which the `onLoad` handler picks up via
+        // the `text/css` content-type -> `loader: "css"` mapping).
+        const importerIsCss = /\.css(?:\?|$)/.test(args.importer ?? "");
+        if (importerIsCss && /^tailwindcss(?:\/|$)/.test(path)) {
+          return {
+            path: args.path,
+            external: true,
+          };
         }
 
         // Check if this is a file: dependency
