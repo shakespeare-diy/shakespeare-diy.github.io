@@ -2,7 +2,7 @@ image: node:25
 
 default:
   interruptible: true
-  timeout: 20 minutes
+  timeout: 1 minute
   cache:
     key:
       files:
