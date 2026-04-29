@@ -4,17 +4,22 @@ import { AISettingsContext, type AISettings, type AIProvider, type MCPServer, ty
 import { useFS } from '@/hooks/useFS';
 import { useFSPaths } from '@/hooks/useFSPaths';
 import { readAISettings, writeAISettings } from '@/lib/configUtils';
-import { OPENCODE_DEFAULT_SETTINGS } from '@/lib/opencode-defaults';
 
 interface AISettingsProviderProps {
   children: ReactNode;
 }
 
+const DEFAULT_SETTINGS: AISettings = {
+  providers: [],
+  recentlyUsedModels: [],
+  mcpServers: {},
+};
+
 export function AISettingsProvider({ children }: AISettingsProviderProps) {
   const queryClient = useQueryClient();
   const { fs } = useFS();
   const { configPath } = useFSPaths();
-  const [settings, setSettings] = useState<AISettings>(OPENCODE_DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AISettings>(DEFAULT_SETTINGS);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize settings from VFS on mount
@@ -25,7 +30,7 @@ export function AISettingsProvider({ children }: AISettingsProviderProps) {
         setSettings(settings);
       } catch (error) {
         console.error('Failed to initialize AI settings:', error);
-        setSettings(OPENCODE_DEFAULT_SETTINGS);
+        setSettings(DEFAULT_SETTINGS);
       } finally {
         setIsInitialized(true);
       }
