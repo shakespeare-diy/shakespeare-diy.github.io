@@ -36,27 +36,17 @@ describe('AISettingsProvider', () => {
     });
   });
 
-  it('should initialize with OpenCode defaults for new users (no providers)', async () => {
+  it('should initialize with empty recentlyUsedModels array', async () => {
     const { result } = renderHook(() => useAISettings(), {
       wrapper: ({ children }) => <TestApp>{children}</TestApp>,
     });
 
     await waitFor(() => {
-      // New users with no providers get OPENCODE_DEFAULT_SETTINGS with big-pickle
-      expect(result.current.settings.providers).toHaveLength(1);
-      expect(result.current.settings.providers[0].id).toBe('opencode');
-      expect(result.current.settings.recentlyUsedModels).toEqual(['opencode/big-pickle']);
+      expect(result.current.settings.recentlyUsedModels).toEqual([]);
     });
   });
 
   it('should add recently used models correctly', async () => {
-    // Simulate existing user with a provider configured
-    const { readAISettings } = await import('@/lib/configUtils');
-    vi.mocked(readAISettings).mockResolvedValue({
-      providers: [{ id: 'openrouter', name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test-key' }],
-      recentlyUsedModels: [],
-    });
-
     const { result } = renderHook(() => useAISettings(), {
       wrapper: ({ children }) => <TestApp>{children}</TestApp>,
     });
@@ -75,13 +65,6 @@ describe('AISettingsProvider', () => {
   });
 
   it('should move existing model to front when used again', async () => {
-    // Simulate existing user with a provider configured
-    const { readAISettings } = await import('@/lib/configUtils');
-    vi.mocked(readAISettings).mockResolvedValue({
-      providers: [{ id: 'openrouter', name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test-key' }],
-      recentlyUsedModels: [],
-    });
-
     const { result } = renderHook(() => useAISettings(), {
       wrapper: ({ children }) => <TestApp>{children}</TestApp>,
     });
@@ -116,13 +99,6 @@ describe('AISettingsProvider', () => {
   });
 
   it('should limit recently used models to 10 items', async () => {
-    // Simulate existing user with a provider configured
-    const { readAISettings } = await import('@/lib/configUtils');
-    vi.mocked(readAISettings).mockResolvedValue({
-      providers: [{ id: 'openrouter', name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test-key' }],
-      recentlyUsedModels: [],
-    });
-
     const { result } = renderHook(() => useAISettings(), {
       wrapper: ({ children }) => <TestApp>{children}</TestApp>,
     });
@@ -171,13 +147,6 @@ describe('AISettingsProvider', () => {
   });
 
   it('should invalidate provider-models query when updateSettings is called with providers', async () => {
-    // Simulate existing user with a provider configured
-    const { readAISettings } = await import('@/lib/configUtils');
-    vi.mocked(readAISettings).mockResolvedValue({
-      providers: [{ id: 'openrouter', name: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test-key' }],
-      recentlyUsedModels: [],
-    });
-
     // Mock the QueryClient.invalidateQueries method
     const mockInvalidateQueries = vi.fn();
 

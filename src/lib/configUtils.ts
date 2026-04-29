@@ -1,7 +1,7 @@
 import z from 'zod';
 import { filteredArray } from '@/lib/schema';
 import { AI_PROVIDER_PRESETS } from '@/lib/aiProviderPresets';
-import { EMPTY_AI_SETTINGS } from '@/lib/opencode-defaults';
+import { OPENCODE_DEFAULT_SETTINGS } from '@/lib/opencode-defaults';
 import type { JSRuntimeFS } from '@/lib/JSRuntime';
 import type { AISettings, MCPServer } from '@/contexts/AISettingsContext';
 import type { GitSettings, GitCredential } from '@/contexts/GitSettingsContext';
@@ -205,7 +205,7 @@ export async function readAISettings(fs: JSRuntimeFS, configPath = '/config'): P
     if (error instanceof z.ZodError) {
       console.error('AI settings parsing error:', error.issues);
     }
-    return EMPTY_AI_SETTINGS;
+    return OPENCODE_DEFAULT_SETTINGS;
   }
 }
 
