@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.13.2] - 2026-04-29
+
+### Changed
+- Preview pane now uses the new iframe.diy sandboxing service for a faster, more reliable preview experience
+
 ## [9.13.1] - 2026-04-27
 
 ### Changed
