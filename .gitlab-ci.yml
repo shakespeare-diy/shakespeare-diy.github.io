@@ -42,7 +42,7 @@ deploy:
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
     - echo "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
     - ssh-keyscan -H "${DEPLOY_TARGET##*@}" >> ~/.ssh/known_hosts 2>/dev/null
-    - rsync -av --exclude=sw.js --exclude=index.html -e "ssh -i ~/.ssh/id_ed25519" dist/ "${DEPLOY_TARGET}:/"
+    - rsync -av --exclude=/sw.js --exclude=/index.html -e "ssh -i ~/.ssh/id_ed25519" dist/ "${DEPLOY_TARGET}:/"
     - rsync -av -e "ssh -i ~/.ssh/id_ed25519" dist/index.html "${DEPLOY_TARGET}:/"
 
 deploy-nsite:
