@@ -602,7 +602,7 @@ export function SystemSettings() {
                 <Input
                   id="preview-domain"
                   type="text"
-                  placeholder="local-shakespeare.dev"
+                  placeholder="iframe.diy"
                   value={previewDomainInput}
                   onChange={(e) => {
                     const value = e.target.value;
