@@ -1,5 +1,6 @@
 import { useNostr } from '@nostrify/react';
 import { NLogin, useNostrLogin } from '@nostrify/react/login';
+import type { NostrConnectParams } from '@nostrify/react/login';
 
 // NOTE: This file should not be edited except for adding new login methods.
 
@@ -16,6 +17,14 @@ export function useLoginActions() {
     // Login with a NIP-46 "bunker://" URI
     async bunker(uri: string): Promise<void> {
       const login = await NLogin.fromBunker(uri, nostr);
+      addLogin(login);
+    },
+    // Login via client-initiated NIP-46 ("nostrconnect://" QR code).
+    // Caller generates params with `generateNostrConnectParams`, renders the
+    // URI as a QR/deep-link, and awaits this promise — it resolves when the
+    // remote signer connects back over the relay.
+    async nostrconnect(params: NostrConnectParams, signal?: AbortSignal): Promise<void> {
+      const login = await NLogin.fromNostrConnect(params, nostr, { signal });
       addLogin(login);
     },
     // Login with a NIP-07 browser extension

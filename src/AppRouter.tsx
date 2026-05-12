@@ -21,6 +21,7 @@ import GitHubOAuth from "./pages/GitHubOAuth";
 import NetlifyOAuth from "./pages/NetlifyOAuth";
 import VercelOAuth from "./pages/VercelOAuth";
 import OpenRouterOAuth from "./pages/OpenRouterOAuth";
+import RemoteLoginSuccess from "./pages/RemoteLoginSuccess";
 import { NIP19Page } from "./pages/NIP19Page";
 import NotFound from "./pages/NotFound";
 import { ProjectView } from "./pages/ProjectView";
@@ -43,6 +44,7 @@ export function AppRouter() {
         <Route path="/oauth/netlify" element={<NetlifyOAuth />} />
         <Route path="/oauth/vercel" element={<VercelOAuth />} />
         <Route path="/oauth/openrouter" element={<OpenRouterOAuth />} />
+        <Route path="/remoteloginsuccess" element={<RemoteLoginSuccess />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Settings />} />
           <Route path="preferences" element={<Preferences />} />

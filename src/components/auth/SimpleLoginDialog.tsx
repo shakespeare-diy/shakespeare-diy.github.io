@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Cloud, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 // Alert components removed as they're not used in the simplified design
 import { useLoginActions } from '@/hooks/useLoginActions';
 import { cn } from '@/lib/utils';
+import BunkerLoginPanel from '@/components/auth/BunkerLoginPanel';
 
 // Only using key-add step now
 
@@ -20,10 +21,6 @@ const validateNsec = (nsec: string) => {
   return /^nsec1[a-zA-Z0-9]{58}$/.test(nsec);
 };
 
-const validateBunkerUri = (uri: string) => {
-  return uri.startsWith('bunker://');
-};
-
 const SimpleLoginDialog: React.FC<SimpleLoginDialogProps> = ({
   isOpen,
   onClose,
@@ -34,11 +31,9 @@ const SimpleLoginDialog: React.FC<SimpleLoginDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [nsec, setNsec] = useState('');
-  const [bunkerUri, setBunkerUri] = useState('');
   const [activeTab, setActiveTab] = useState<'nsec' | 'bunker'>('nsec');
   const [errors, setErrors] = useState<{
     nsec?: string;
-    bunker?: string;
     extension?: string;
     file?: string;
   }>({});
@@ -52,7 +47,6 @@ const SimpleLoginDialog: React.FC<SimpleLoginDialogProps> = ({
       setIsLoading(false);
       setIsFileLoading(false);
       setNsec('');
-      setBunkerUri('');
       setActiveTab('nsec');
       setErrors({});
       // Reset file input
@@ -95,35 +89,6 @@ const SimpleLoginDialog: React.FC<SimpleLoginDialogProps> = ({
       return;
     }
     executeLogin(nsec);
-  };
-
-  const handleBunkerLogin = async () => {
-    if (!bunkerUri.trim()) {
-      setErrors(prev => ({ ...prev, bunker: 'Please enter a bunker URI' }));
-      return;
-    }
-
-    if (!validateBunkerUri(bunkerUri)) {
-      setErrors(prev => ({ ...prev, bunker: 'Invalid bunker URI format. Must start with bunker://' }));
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors(prev => ({ ...prev, bunker: undefined }));
-
-    try {
-      await login.bunker(bunkerUri);
-      onLogin();
-      onClose();
-      setBunkerUri('');
-    } catch {
-      setErrors(prev => ({
-        ...prev,
-        bunker: 'Failed to connect to bunker. Please check the URI.'
-      }));
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const executeLogin = (key: string) => {
@@ -278,32 +243,12 @@ const SimpleLoginDialog: React.FC<SimpleLoginDialogProps> = ({
             )}
 
             {activeTab === 'bunker' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Input
-                    value={bunkerUri}
-                    onChange={(e) => {
-                      setBunkerUri(e.target.value);
-                      if (errors.bunker) setErrors(prev => ({ ...prev, bunker: undefined }));
-                    }}
-                    placeholder="bunker://"
-                    className={errors.bunker ? 'border-red-500' : ''}
-                  />
-                  {errors.bunker && (
-                    <p className="text-sm text-red-500">{errors.bunker}</p>
-                  )}
-                </div>
-
-                <Button
-                  size="lg"
-                  onClick={handleBunkerLogin}
-                  disabled={isLoading || !bunkerUri.trim()}
-                  className="w-full"
-                >
-                  <Cloud className="w-4 h-4 mr-2" />
-                  {isLoading ? 'Connecting...' : 'Connect'}
-                </Button>
-              </div>
+              <BunkerLoginPanel
+                onLoggedIn={() => {
+                  onLogin();
+                  onClose();
+                }}
+              />
             )}
 
             <div className="relative">
