@@ -1,16 +1,14 @@
 // NOTE: This file is stable and usually should not be modified.
 // It is important that all functionality in this file is preserved, and should only be modified if explicitly requested.
 
-import React, { useRef, useState, useEffect } from 'react';
-import { Shield, Upload, AlertTriangle, UserPlus, KeyRound, Sparkles, Cloud } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, AlertTriangle, UserPlus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogDescription } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLoginActions } from '@/hooks/useLoginActions';
 import { cn } from '@/lib/utils';
-import BunkerLoginPanel from '@/components/auth/BunkerLoginPanel';
+import LoginPanel from '@/components/auth/LoginPanel';
 
 interface LoginDialogProps {
   isOpen: boolean;
@@ -19,40 +17,21 @@ interface LoginDialogProps {
   onSignup?: () => void;
 }
 
-const validateNsec = (nsec: string) => {
-  return /^nsec1[a-zA-Z0-9]{58}$/.test(nsec);
-};
-
 const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onSignup }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFileLoading, setIsFileLoading] = useState(false);
-  const [nsec, setNsec] = useState('');
-  const [errors, setErrors] = useState<{
-    nsec?: string;
-    file?: string;
-    extension?: string;
-  }>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isExtensionLoading, setIsExtensionLoading] = useState(false);
+  const [extensionError, setExtensionError] = useState<string | null>(null);
   const login = useLoginActions();
 
-  // Reset all state when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
-      // Reset state when dialog opens
-      setIsLoading(false);
-      setIsFileLoading(false);
-      setNsec('');
-      setErrors({});
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setIsExtensionLoading(false);
+      setExtensionError(null);
     }
   }, [isOpen]);
 
   const handleExtensionLogin = async () => {
-    setIsLoading(true);
-    setErrors(prev => ({ ...prev, extension: undefined }));
+    setIsExtensionLoading(true);
+    setExtensionError(null);
 
     try {
       if (!('nostr' in window)) {
@@ -63,75 +42,13 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
       onClose();
     } catch (e: unknown) {
       const error = e as Error;
-      console.error('Bunker login failed:', error);
-      console.error('Nsec login failed:', error);
       console.error('Extension login failed:', error);
-      setErrors(prev => ({
-        ...prev,
-        extension: error instanceof Error ? error.message : 'Extension login failed'
-      }));
+      setExtensionError(
+        error instanceof Error ? error.message : 'Extension login failed',
+      );
     } finally {
-      setIsLoading(false);
+      setIsExtensionLoading(false);
     }
-  };
-
-  const executeLogin = (key: string) => {
-    setIsLoading(true);
-    setErrors({});
-
-    // Use a timeout to allow the UI to update before the synchronous login call
-    setTimeout(() => {
-      try {
-        login.nsec(key);
-        onLogin();
-        onClose();
-      } catch {
-        setErrors({ nsec: "Failed to login with this key. Please check that it's correct." });
-        setIsLoading(false);
-      }
-    }, 50);
-  };
-
-  const handleKeyLogin = () => {
-    if (!nsec.trim()) {
-      setErrors(prev => ({ ...prev, nsec: 'Please enter your secret key' }));
-      return;
-    }
-
-    if (!validateNsec(nsec)) {
-      setErrors(prev => ({ ...prev, nsec: 'Invalid secret key format. Must be a valid nsec starting with nsec1.' }));
-      return;
-    }
-    executeLogin(nsec);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsFileLoading(true);
-    setErrors({});
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setIsFileLoading(false);
-      const content = event.target?.result as string;
-      if (content) {
-        const trimmedContent = content.trim();
-        if (validateNsec(trimmedContent)) {
-          executeLogin(trimmedContent);
-        } else {
-          setErrors({ file: 'File does not contain a valid secret key.' });
-        }
-      } else {
-        setErrors({ file: 'Could not read file content.' });
-      }
-    };
-    reader.onerror = () => {
-      setIsFileLoading(false);
-      setErrors({ file: 'Failed to read file.' });
-    };
-    reader.readAsText(file);
   };
 
   const handleSignupClick = () => {
@@ -141,7 +58,12 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
     }
   };
 
-  const defaultTab = 'nostr' in window ? 'extension' : 'key';
+  const handleLoggedIn = () => {
+    onLogin();
+    onClose();
+  };
+
+  const hasExtension = typeof window !== 'undefined' && 'nostr' in window;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -189,123 +111,29 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
             </div>
           </div>
 
-          {/* Login Methods */}
-          <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 bg-muted/80 rounded-lg mb-4">
-              <TabsTrigger value="extension" className="flex items-center gap-2">
-                <Shield className="w-4 h-4" />
-                <span>Extension</span>
-              </TabsTrigger>
-              <TabsTrigger value="key" className="flex items-center gap-2">
-                <KeyRound className="w-4 h-4" />
-                <span>Key</span>
-              </TabsTrigger>
-              <TabsTrigger value="bunker" className="flex items-center gap-2">
-                <Cloud className="w-4 h-4" />
-                <span>Bunker</span>
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value='extension' className='space-y-3 bg-muted'>
-              {errors.extension && (
+          {/* Unified login panel — QR + nsec/bunker input + file upload */}
+          <LoginPanel onLoggedIn={handleLoggedIn} />
+
+          {/* Extension login (only shown when a NIP-07 extension is present) */}
+          {hasExtension && (
+            <div className='rounded-lg bg-muted p-3 space-y-2'>
+              {extensionError && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>{errors.extension}</AlertDescription>
+                  <AlertDescription>{extensionError}</AlertDescription>
                 </Alert>
               )}
-              <div className='text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800'>
-                <Shield className='w-12 h-12 mx-auto mb-3 text-primary' />
-                <p className='text-sm text-gray-600 dark:text-gray-300 mb-4'>
-                  Login with one click using the browser extension
-                </p>
-                <div className="flex justify-center">
-                  <Button
-                    className='w-full rounded-full py-4'
-                    onClick={handleExtensionLogin}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Logging in...' : 'Login with Extension'}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value='key' className='space-y-4'>
-              <div className='space-y-4'>
-                <div className='space-y-2'>
-                  <label htmlFor='nsec' className='text-sm font-medium'>
-                    Secret Key (nsec)
-                  </label>
-                  <Input
-                    id='nsec'
-                    type="password"
-                    value={nsec}
-                    onChange={(e) => {
-                      setNsec(e.target.value);
-                      if (errors.nsec) setErrors(prev => ({ ...prev, nsec: undefined }));
-                    }}
-                    className={`rounded-lg ${
-                      errors.nsec ? 'border-red-500 focus-visible:ring-red-500' : ''
-                    }`}
-                    placeholder='nsec1...'
-                    autoComplete="off"
-                  />
-                  {errors.nsec && (
-                    <p className="text-sm text-red-500">{errors.nsec}</p>
-                  )}
-                </div>
-
-                <Button
-                  className='w-full rounded-full py-3'
-                  onClick={handleKeyLogin}
-                  disabled={isLoading || !nsec.trim()}
-                >
-                  {isLoading ? 'Verifying...' : 'Log In'}
-                </Button>
-
-                <div className='relative'>
-                  <div className='absolute inset-0 flex items-center'>
-                    <div className='w-full border-t border-muted'></div>
-                  </div>
-                  <div className='relative flex justify-center text-xs'>
-                    <span className='px-2 bg-background text-muted-foreground'>
-                      or
-                    </span>
-                  </div>
-                </div>
-
-                <div className='text-center'>
-                  <input
-                    type='file'
-                    accept='.txt'
-                    className='hidden'
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                  />
-                  <Button
-                    variant='outline'
-                    className='w-full'
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading || isFileLoading}
-                  >
-                    <Upload className='w-4 h-4 mr-2' />
-                    {isFileLoading ? 'Reading File...' : 'Upload Your Key File'}
-                  </Button>
-                  {errors.file && (
-                    <p className="text-sm text-red-500 mt-2">{errors.file}</p>
-                  )}
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value='bunker' className='space-y-3'>
-              <BunkerLoginPanel
-                onLoggedIn={() => {
-                  onLogin();
-                  onClose();
-                }}
-              />
-            </TabsContent>
-          </Tabs>
+              <Button
+                variant='outline'
+                className='w-full rounded-full'
+                onClick={handleExtensionLogin}
+                disabled={isExtensionLoading}
+              >
+                <Shield className='w-4 h-4 mr-2' />
+                {isExtensionLoading ? 'Logging in…' : 'Sign in with browser extension'}
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
