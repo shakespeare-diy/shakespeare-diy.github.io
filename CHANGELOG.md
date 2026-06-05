@@ -1,5 +1,18 @@
 # Changelog
 
+## [9.14.0] - 2026-06-05
+
+### Added
+- Log in with a remote signer by scanning a QR code — connect your NIP-46 mobile signer to Shakespeare without copying and pasting bunker strings
+
+### Changed
+- Unified the login dialog into a single, streamlined experience across sign-in methods
+
+### Fixed
+- Custom fonts now load correctly in previews instead of triggering a runtime error
+- Builds no longer fail when a project depends on types-only packages
+- Resolved all known security vulnerabilities in dependencies
+
 ## [9.13.2] - 2026-04-29
 
 ### Changed
