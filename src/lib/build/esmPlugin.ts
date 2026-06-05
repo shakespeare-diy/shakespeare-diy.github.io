@@ -447,6 +447,20 @@ export function esmPlugin(options: EsmPluginOptions): Plugin {
         }
 
         if (!res.ok) {
+          // Some packages ship only TypeScript types with an effectively-empty
+          // runtime JS file (e.g. `@solana/rpc-parsed-types`). esm.sh's build
+          // pipeline rejects these zero-export modules with an HTTP 500, even
+          // though the package is perfectly valid — consumers only import its
+          // types at compile time. When that happens, fall back to a raw CDN
+          // (jsDelivr) to inspect the actual runtime. If the runtime is indeed
+          // empty (no exports/imports/code), synthesize an empty ES module so
+          // the build can proceed. Genuine failures (non-empty modules that
+          // failed for other reasons) are re-thrown unchanged.
+          const empty = await resolveEmptyModuleFallback(args.path, nameVersionToPaths);
+          if (empty !== undefined) {
+            return { contents: empty, loader: "js" };
+          }
+
           throw new Error(`Failed to fetch ${args.path}`);
         }
 
@@ -508,4 +522,95 @@ function extractPackageName(esmURL: string): { pkg?: string; version?: string } 
   }
 
   return { pkg, version };
+}
+
+/**
+ * Determine whether a chunk of JavaScript is an "empty" runtime module — i.e.
+ * it contains no executable code and no ES `import`/`export` statements once
+ * comments and whitespace are stripped. This is the signature of a types-only
+ * package whose compiled JS is intentionally empty.
+ */
+export function isEffectivelyEmptyModule(source: string): boolean {
+  const stripped = source
+    // Block comments (including jsDelivr/esm.sh banners and sourceMappingURL)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    // Line comments (covers `//# sourceMappingURL=...`)
+    .replace(/^\s*\/\/.*$/gm, "")
+    // Directive prologues like `'use strict';` / `"use strict";`
+    .replace(/^\s*(['"])use strict\1\s*;?\s*$/gm, "")
+    .trim();
+
+  if (stripped.length === 0) return true;
+
+  // If there's any leftover content, only treat it as empty when it carries no
+  // imports, exports, or other meaningful tokens. A bare `export {};` counts as
+  // empty (it exports nothing), but anything else is a real module.
+  if (/^export\s*\{\s*\}\s*;?$/.test(stripped)) return true;
+
+  return false;
+}
+
+/**
+ * When esm.sh fails to build a module, attempt to recover by inspecting the
+ * package's actual runtime via jsDelivr's `+esm` endpoint. If that runtime is
+ * effectively empty (a types-only package), return an empty ES module string.
+ * Returns `undefined` when the package is not empty (so the caller should treat
+ * the original failure as fatal).
+ */
+export async function resolveEmptyModuleFallback(
+  esmURL: string,
+  nameVersionToPaths: Map<string, string[]>,
+): Promise<string | undefined> {
+  let pkg: string | undefined;
+  let version: string | undefined;
+
+  try {
+    ({ pkg, version } = extractPackageName(esmURL));
+  } catch {
+    return undefined;
+  }
+
+  if (!pkg) return undefined;
+
+  // Only attempt the empty-module recovery for JavaScript module requests.
+  // Asset/CSS/JSON failures are unrelated to the types-only-package problem and
+  // should remain fatal.
+  try {
+    const ext = extname(new URL(esmURL).pathname).slice(1).toLowerCase();
+    if (ext && !["js", "jsx", "mjs", "cjs", "ts", "tsx"].includes(ext)) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  // The esm.sh URL for a transitive dependency often omits the version
+  // (e.g. `*@solana/rpc-parsed-types?target=esnext`). Recover it from the
+  // lockfile index when possible so the fallback fetch is deterministic.
+  if (!version) {
+    for (const key of nameVersionToPaths.keys()) {
+      const at = key.lastIndexOf("@");
+      if (at > 0 && key.slice(0, at) === pkg) {
+        version = key.slice(at + 1);
+        break;
+      }
+    }
+  }
+
+  const spec = version ? `${pkg}@${version}` : pkg;
+  const fallbackURL = `https://cdn.jsdelivr.net/npm/${spec}/+esm`;
+
+  try {
+    const res = await fetch(fallbackURL);
+    if (!res.ok) return undefined;
+
+    const text = await res.text();
+    if (isEffectivelyEmptyModule(text)) {
+      return "export {};\n";
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
