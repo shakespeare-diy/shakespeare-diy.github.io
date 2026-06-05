@@ -2,7 +2,49 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   isEffectivelyEmptyModule,
   resolveEmptyModuleFallback,
+  stripAssetUrlWildcard,
 } from "./esmPlugin";
+
+describe("stripAssetUrlWildcard", () => {
+  it("strips esm.sh's leading /* wildcard prefix from asset URLs", () => {
+    expect(
+      stripAssetUrlWildcard(
+        "https://esm.sh/*@fontsource/playfair-display@5.2.8/files/x.woff2",
+      ),
+    ).toBe("https://esm.sh/@fontsource/playfair-display@5.2.8/files/x.woff2");
+  });
+
+  it("preserves the query string (e.g. the lp breadcrumb)", () => {
+    expect(
+      stripAssetUrlWildcard(
+        "https://esm.sh/*@fontsource/foo@1/files/y.woff?lp=node_modules%252F%2540fontsource%252Ffoo",
+      ),
+    ).toBe(
+      "https://esm.sh/@fontsource/foo@1/files/y.woff?lp=node_modules%252F%2540fontsource%252Ffoo",
+    );
+  });
+
+  it("leaves URLs without a wildcard prefix unchanged", () => {
+    const url = "https://esm.sh/@fontsource/foo@1/files/y.woff2?lp=abc";
+    expect(stripAssetUrlWildcard(url)).toBe(url);
+  });
+
+  it("only strips a leading /* in the path, not a * elsewhere", () => {
+    const url = "https://esm.sh/@scope/pkg@1/a*b/file.woff2";
+    expect(stripAssetUrlWildcard(url)).toBe(url);
+  });
+
+  it("returns the input unchanged when it is not a valid URL", () => {
+    expect(stripAssetUrlWildcard("not a url")).toBe("not a url");
+  });
+
+  it("produces a url() value with no literal /* (the Tailwind tokenizer trap)", () => {
+    const fixed = stripAssetUrlWildcard(
+      "https://esm.sh/*@fontsource/playfair-display@5.2.8/files/x.woff2",
+    );
+    expect(`src: url(${fixed})`).not.toContain("/*");
+  });
+});
 
 describe("isEffectivelyEmptyModule", () => {
   it("treats a file with only source-map comments as empty", () => {

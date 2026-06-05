@@ -416,7 +416,10 @@ export function esmPlugin(options: EsmPluginOptions): Plugin {
         const ext = extname(fullURL.pathname).slice(1);
         if (ext && !["ts", "tsx", "js", "jsx", "mjs", "cjs", "css", "json"].includes(ext)) {
           return {
-            path: fullURL.toString(),
+            // Strip esm.sh's `/*` wildcard prefix so the URL is safe to embed
+            // verbatim in CSS `url()` (a literal `/*` there is misread as a CSS
+            // comment by some parsers, including the Tailwind v4 runtime).
+            path: stripAssetUrlWildcard(fullURL.toString()),
             external: true,
           };
         }
@@ -491,8 +494,11 @@ export function esmPlugin(options: EsmPluginOptions): Plugin {
 
       // Convert `?url` imports to URL strings pointing to the ESM CDN
       build.onLoad({ filter: /.*/, namespace: "esm-file-external" }, (args) => {
+        // Strip esm.sh's `/*` wildcard prefix: these URLs are asset references
+        // that may be embedded in CSS, where a literal `/*` in `url()` breaks
+        // some CSS parsers (including the Tailwind v4 runtime).
         return {
-          contents: `export default ${JSON.stringify(args.path)};`,
+          contents: `export default ${JSON.stringify(stripAssetUrlWildcard(args.path))};`,
           loader: "js",
         };
       });
@@ -522,6 +528,37 @@ function extractPackageName(esmURL: string): { pkg?: string; version?: string } 
   }
 
   return { pkg, version };
+}
+
+/**
+ * Remove esm.sh's leading `/*` wildcard prefix from an asset URL's path.
+ *
+ * Shakespeare resolves CDN modules through esm.sh's `*` ("externalize all
+ * dependencies") prefix, e.g. `https://esm.sh/*@fontsource/x@1/...`. That `*`
+ * only influences how esm.sh builds JavaScript modules; for raw static assets
+ * (fonts, images, wasm, …) it is meaningless and esm.sh serves the identical
+ * file with or without it.
+ *
+ * The prefix is harmful when the asset URL is written verbatim into CSS:
+ * `src: url(https://esm.sh/*@fontsource/...woff2)` contains a literal `/*`
+ * inside an unquoted `url()`, which several CSS parsers (notably the in-browser
+ * Tailwind v4 tokenizer) misread as the start of a CSS comment. The
+ * tokenizer then scans past the rule's closing `}`, leaving the `@font-face`
+ * rule unterminated and throwing "Missing closing } at font-face".
+ *
+ * Stripping the wildcard from asset URLs keeps the emitted CSS parseable by all
+ * CSS parsers. JS module URLs are left untouched (they are not passed through
+ * this helper) since they legitimately rely on the `*` prefix.
+ */
+export function stripAssetUrlWildcard(urlStr: string): string {
+  try {
+    const url = new URL(urlStr);
+    if (!url.pathname.startsWith("/*")) return urlStr;
+    url.pathname = url.pathname.replace(/^\/\*/, "/");
+    return url.toString();
+  } catch {
+    return urlStr;
+  }
 }
 
 /**
