@@ -24,11 +24,11 @@ vi.mock('nostr-tools', () => ({
 
 // Mock NPool to avoid actual network calls
 vi.mock('@nostrify/nostrify', () => ({
-  NPool: vi.fn().mockImplementation(() => ({
-    event: vi.fn().mockResolvedValue(undefined),
-    close: vi.fn().mockResolvedValue(undefined),
-  })),
-  NRelay1: vi.fn(),
+  NPool: class {
+    event = vi.fn().mockResolvedValue(undefined);
+    close = vi.fn().mockResolvedValue(undefined);
+  },
+  NRelay1: class {},
 }));
 
 describe('NostrPublishEventsTool', () => {

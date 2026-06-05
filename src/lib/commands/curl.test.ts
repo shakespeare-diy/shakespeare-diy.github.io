@@ -388,11 +388,15 @@ describe('CurlCommand', () => {
   it('should handle timeout', async () => {
     vi.useFakeTimers();
 
+    const abortFn = vi.fn();
     const mockController = {
-      abort: vi.fn(),
+      abort: abortFn,
       signal: { aborted: false }
     };
-    global.AbortController = vi.fn(() => mockController) as unknown as typeof AbortController;
+    global.AbortController = class {
+      abort = abortFn;
+      signal = mockController.signal;
+    } as unknown as typeof AbortController;
 
     // Mock fetch to reject with AbortError after timeout
     mockFetch.mockImplementation(() => {
