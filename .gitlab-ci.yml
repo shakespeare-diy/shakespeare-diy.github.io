@@ -44,7 +44,6 @@ deploy:
     - ssh-keyscan -H "${DEPLOY_TARGET##*@}" >> ~/.ssh/known_hosts 2>/dev/null
     - rsync -av --exclude=/sw.js --exclude=/index.html -e "ssh -i ~/.ssh/id_ed25519" dist/ "${DEPLOY_TARGET}:/"
     - rsync -av -e "ssh -i ~/.ssh/id_ed25519" dist/index.html "${DEPLOY_TARGET}:/"
-    - rsync -av -e "ssh -i ~/.ssh/id_ed25519" dist/sw.js "${DEPLOY_TARGET}:/"
 
 deploy-nsite:
   stage: deploy
