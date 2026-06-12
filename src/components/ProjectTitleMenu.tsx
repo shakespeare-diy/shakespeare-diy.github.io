@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useQueryClient } from '@tanstack/react-query';
+import { OptimizeRepositoryMenuItem } from '@/components/OptimizeRepositoryMenuItem';
 
 interface ProjectTitleMenuProps {
   projectId: string;
@@ -118,6 +119,8 @@ export function ProjectTitleMenu({
           <History className="h-4 w-4" />
           Rollback
         </DropdownMenuItem>
+
+        <OptimizeRepositoryMenuItem projectId={projectId} disabled={isAnyLoading} />
 
         <DropdownMenuItem
           onClick={onNewChat}
