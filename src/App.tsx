@@ -63,6 +63,7 @@ const defaultConfig: AppConfig = {
     relays: [
       { url: 'wss://git.shakespeare.diy/' },
       { url: 'wss://relay.ngit.dev/' },
+      { url: 'wss://git.nostrhub.io/' },
     ],
     updatedAt: 0,
   },
