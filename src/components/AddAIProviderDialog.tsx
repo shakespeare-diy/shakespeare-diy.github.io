@@ -156,7 +156,7 @@ export function AddAIProviderDialog({
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && apiKey.trim() && termsAgreed) {
+                    if (e.key === 'Enter' && apiKey.trim() && (termsAgreed || !preset.tosURL)) {
                       handleAdd();
                     }
                   }}
@@ -165,20 +165,20 @@ export function AddAIProviderDialog({
                 />
               )}
 
-              {/* Terms of Service Agreement */}
-              <div className="flex items-center gap-1.5">
-                <Checkbox
-                  id="agree-terms"
-                  checked={termsAgreed}
-                  onCheckedChange={(checked) => setTermsAgreed(checked === true)}
-                  className="size-3 [&_svg]:size-3"
-                />
-                <label
-                  htmlFor="agree-terms"
-                  className="text-xs text-muted-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  {t('agreeToTermsOfService', { providerName: preset.name })}{' '}
-                  {preset.tosURL ? (
+              {/* Terms of Service Agreement (skipped for providers without terms, e.g. local services) */}
+              {preset.tosURL && (
+                <div className="flex items-center gap-1.5">
+                  <Checkbox
+                    id="agree-terms"
+                    checked={termsAgreed}
+                    onCheckedChange={(checked) => setTermsAgreed(checked === true)}
+                    className="size-3 [&_svg]:size-3"
+                  />
+                  <label
+                    htmlFor="agree-terms"
+                    className="text-xs text-muted-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    {t('agreeToTermsOfService', { providerName: preset.name })}{' '}
                     <a
                       href={preset.tosURL}
                       target="_blank"
@@ -188,11 +188,9 @@ export function AddAIProviderDialog({
                     >
                       {t('termsOfService')}
                     </a>
-                  ) : (
-                    t('termsOfService')
-                  )}
-                </label>
-              </div>
+                  </label>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -205,7 +203,7 @@ export function AddAIProviderDialog({
             <Button
               onClick={handleAdd}
               disabled={
-                !termsAgreed ||
+                (!!preset.tosURL && !termsAgreed) ||
                 (!!preset.apiKeysURL && !apiKey.trim())
               }
             >
