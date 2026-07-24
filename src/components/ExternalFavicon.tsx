@@ -1,7 +1,25 @@
 import { useAppContext } from '@/hooks/useAppContext';
 import { faviconUrl } from '@/lib/faviconUrl';
 import { cn } from '@/lib/utils';
+import { Globe } from 'lucide-react';
 import { ReactNode, useMemo } from 'react';
+
+/**
+ * Icons for known providers whose URLs can't resolve a favicon,
+ * such as services running on localhost.
+ */
+function knownProviderIcon(url: string | URL | undefined, size: number): ReactNode | undefined {
+  if (!url) return;
+  try {
+    const u = new URL(url);
+    // Meridian local bridge
+    if (u.hostname === '127.0.0.1' && u.port === '3456') {
+      return <Globe size={size} className="text-purple-500" />;
+    }
+  } catch {
+    return;
+  }
+}
 
 interface ExternalFaviconProps {
   /** The URL to fetch the favicon for */
@@ -41,6 +59,16 @@ export function ExternalFavicon({
       return;
     }
   }, [url, config.faviconUrl]);
+
+  // Providers with a known icon (e.g. local services) skip the favicon service
+  const knownIcon = knownProviderIcon(url, size);
+  if (knownIcon) {
+    return (
+      <span className={cn('inline-flex items-center justify-center', className)}>
+        {knownIcon}
+      </span>
+    );
+  }
 
   // If faviconSrc is not available, render the fallback directly
   if (!faviconSrc) {

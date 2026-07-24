@@ -109,8 +109,9 @@ export function AISettings() {
       baseURL: preset.baseURL,
     };
 
-    if (apiKey.trim()) {
-      newProvider.apiKey = apiKey.trim();
+    const key = apiKey.trim() || preset.apiKey;
+    if (key) {
+      newProvider.apiKey = key;
     }
     if (typeof preset.nostr === 'boolean') {
       newProvider.nostr = preset.nostr;

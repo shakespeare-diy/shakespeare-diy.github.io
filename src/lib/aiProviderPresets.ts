@@ -7,6 +7,8 @@ export interface PresetProvider {
   tosURL?: string;
   proxy?: boolean;
   openSecret?: string;
+  /** Default API key for providers where the key is a required placeholder */
+  apiKey?: string;
 }
 
 export const AI_PROVIDER_PRESETS: PresetProvider[] = [
@@ -105,5 +107,13 @@ export const AI_PROVIDER_PRESETS: PresetProvider[] = [
     apiKeysURL: "https://v0.app/chat/settings/billing",
     tosURL: "https://vercel.com/legal/terms",
     proxy: true,
+  },
+  {
+    // Local Anthropic/OpenAI-compatible bridge; authenticates via the
+    // Claude Code SDK. The API key is a placeholder — any value works.
+    id: "meridian",
+    name: "Meridian",
+    baseURL: "http://127.0.0.1:3456/v1",
+    apiKey: "x",
   },
 ];
