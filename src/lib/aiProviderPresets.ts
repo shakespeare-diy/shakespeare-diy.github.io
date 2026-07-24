@@ -106,4 +106,11 @@ export const AI_PROVIDER_PRESETS: PresetProvider[] = [
     tosURL: "https://vercel.com/legal/terms",
     proxy: true,
   },
+  {
+    // Local Anthropic/OpenAI-compatible bridge; authenticates via the
+    // Claude Code SDK, so no API key is required.
+    id: "meridian",
+    name: "Meridian",
+    baseURL: "http://127.0.0.1:3456/v1",
+  },
 ];
