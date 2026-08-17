@@ -51,9 +51,17 @@ jobs:
           # Pin the binary. An unversioned install has been observed pulling
           # 0.10.1, which emits legacy kind-34128 events that every current
           # gateway ignores while still reporting a successful deploy.
-          curl -sSL -o /usr/local/bin/nsyte \
+          # --retry-all-errors covers the transport faults this download has
+          # actually hit here ("SSL_read: decryption failed or bad record
+          # mac"), which curl does not consider retryable on its own. -f keeps
+          # an HTTP error page from being saved as the binary, and the version
+          # check fails the step rather than letting a truncated download
+          # surface later as a confusing nsyte error.
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --max-time 300 \
+            -o /usr/local/bin/nsyte \
             https://github.com/sandwichfarm/nsyte/releases/download/v0.27.2/nsyte-linux-0.27.2
           chmod +x /usr/local/bin/nsyte
+          nsyte --version
 
           nsyte validate
 
