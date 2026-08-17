@@ -1,0 +1,31 @@
+name: Test
+
+# Typecheck / lint / unit tests / production build for the Shakespeare client.
+# ngit-ci watches .ngit/act/workflows/ and runs each job with `act` (GitHub
+# Actions-compatible syntax) in a Linux container. Runs on every push and on
+# every Nostr PR.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      # package.json splits these: "typecheck" is tsc --noEmit and "test" is
+      # eslint + vitest. The GitLab job ran typecheck, build and test; keep all
+      # three so a type error still fails CI.
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test

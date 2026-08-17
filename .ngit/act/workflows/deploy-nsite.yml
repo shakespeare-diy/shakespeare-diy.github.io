@@ -1,0 +1,96 @@
+name: Deploy nsite
+
+# Builds dist/ and publishes it as the named nsite "shakespeare" (NIP-5A kind
+# 35128) described by .nsite/config.json: the files become Blossom blobs, the
+# manifest mapping path -> sha256 goes to relays, and npanel on venus serves
+# shakespeare.diy from it. Runs on pushes to the default branch, alongside
+# Test.
+#
+# Replaces the GitLab `deploy-nsite` job, which published the same site under a
+# PERSONAL npub with nsyte 0.24.1. The signing pubkey IS the site address, so
+# this one lives in the Team Soapbox namespace instead.
+#
+# Secrets are provisioned by the ngit-ci operator as
+# NGIT_CI_SECRET_<ALIAS>__<NAME> (note the double underscore) and injected ONLY
+# on maintainer-authored triggers, which a push to a watched repo always is.
+# This job needs one:
+#   NSYTE_BUNKER   nbunksec1... -- a pre-established NIP-46 session, the form
+#                  nsyte documents for CI.
+# An empty NSYTE_BUNKER fails the job rather than skipping quietly: this is the
+# only workflow that publishes the client anywhere, so a skipped run would
+# leave the nsite silently pinned to an older build.
+#
+# NOTE: *.shakespeare.diy is NOT served from here. The wildcard keeps its own
+# Caddy vhost and /var/www tree on venus, because the nsite catch-all issues
+# certificates on demand over HTTP-01 and cannot get a wildcard.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Ahead of the build, so a config nsyte will not accept costs seconds
+      # rather than failing at the end of a green-looking run.
+      - name: Install nsyte and validate the config
+        env:
+          NSYTE_BUNKER: ${{ secrets.NSYTE_BUNKER }}
+        run: |
+          set -eu
+          : "${NSYTE_BUNKER:?NSYTE_BUNKER is not set; ask the ngit-ci operator to provision it for this repo alias.}"
+
+          # Pin the binary. An unversioned install has been observed pulling
+          # 0.10.1, which emits legacy kind-34128 events that every current
+          # gateway ignores while still reporting a successful deploy.
+          curl -sSL -o /usr/local/bin/nsyte \
+            https://github.com/sandwichfarm/nsyte/releases/download/v0.27.2/nsyte-linux-0.27.2
+          chmod +x /usr/local/bin/nsyte
+
+          nsyte validate
+
+      - run: npm ci
+
+      # Builds dist/ and copies index.html -> 404.html, the path NIP-5A host
+      # servers fall back to.
+      - run: npm run build
+
+      # Sourcemaps are ~290 files and 30 MB of blobs nobody fetches, and they
+      # near-double the manifest. The GitLab job dropped them too.
+      - run: find dist -name '*.map' -delete
+
+      - name: Publish to Blossom + relays
+        env:
+          NSYTE_BUNKER: ${{ secrets.NSYTE_BUNKER }}
+        run: |
+          set -eu
+
+          # Relays, servers and the site id all come from .nsite/config.json,
+          # so they are versioned with the client rather than split across this
+          # file. The secrets scan is skipped because it prompts on false
+          # positives in our own bundle (pubkeys, bunker:// parsing code), and
+          # a prompt is unanswerable here -- with -i it defaults to N and
+          # aborts.
+          set +e
+          nsyte deploy dist \
+            --sec "$NSYTE_BUNKER" \
+            --concurrency 2 \
+            --non-interactive \
+            --skip-secrets-scan 2>&1 | tee /tmp/nsyte-deploy.log
+          status="${PIPESTATUS[0]}"
+          set -e
+
+          # A deploy that changes no file exits NON-ZERO with "No new files to
+          # upload". That is success: the manifest already on the relays
+          # describes exactly this build.
+          if [ "$status" -ne 0 ] && ! grep -q "No new files to upload" /tmp/nsyte-deploy.log; then
+            exit "$status"
+          fi

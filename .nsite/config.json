@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nsyte.run/schemas/config.schema.json",
+  "relays": [
+    "wss://relay.ditto.pub",
+    "wss://relay.dreamith.to",
+    "wss://relay.primal.net"
+  ],
+  "id": "shakespeare",
+  "servers": [
+    "https://blossom.ditto.pub",
+    "https://blossom.dreamith.to",
+    "https://blossom.primal.net"
+  ],
+  "fallback": "/index.html",
+  "publishRelayList": false,
+  "publishServerList": false,
+  "title": "Shakespeare",
+  "description": "Build custom apps with AI assistance using Shakespeare, an open-source development environment.",
+  "source": "https://gitworkshop.dev/soapbox.pub/relay.ngit.dev/shakespeare"
+}
