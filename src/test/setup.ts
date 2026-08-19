@@ -34,6 +34,81 @@ class LocalStorageMock implements Storage {
 
 global.localStorage = new LocalStorageMock();
 
+// The @nostrify/react 0.6.6 NostrLoginProvider resolves stored logins on a
+// microtask: it renders a null `fallback` on the first synchronous paint and
+// only mounts its children once storage resolves. Component/hook tests render
+// synchronously and query immediately, so they'd observe an empty tree (this is
+// the sole cause of the render breakage introduced by the upgrade). Replace the
+// provider — and the hook that reads its context — with a synchronous
+// equivalent for tests, importing everything else (NLogin.nostrconnect and the
+// connect helpers, whose handshake enforcement is the point of the upgrade;
+// NUser) from the real module untouched.
+vi.mock('@nostrify/react/login', async (importActual) => {
+  const actual = await importActual<typeof import('@nostrify/react/login')>();
+  const { createContext, useContext, useReducer, useEffect, createElement } = await import('react');
+
+  const NostrLoginContext = createContext<unknown>(undefined);
+
+  type Login = { id: string };
+  type LoginAction =
+    | { type: 'login.add'; login: Login; set?: boolean }
+    | { type: 'login.remove'; id: string }
+    | { type: 'login.set'; id: string }
+    | { type: 'login.clear' };
+
+  function reducer(state: Login[], action: LoginAction): Login[] {
+    switch (action.type) {
+      case 'login.add': {
+        const filtered = state.filter((l) => l.id !== action.login.id);
+        return action.set ? [action.login, ...filtered] : [...filtered, action.login];
+      }
+      case 'login.remove':
+        return state.filter((l) => l.id !== action.id);
+      case 'login.set': {
+        const login = state.find((l) => l.id === action.id);
+        if (!login) return state;
+        return [login, ...state.filter((l) => l.id !== action.id)];
+      }
+      case 'login.clear':
+        return [];
+      default:
+        return state;
+    }
+  }
+
+  const NostrLoginProvider = ({ children, storageKey, storage = localStorage }: {
+    children: React.ReactNode;
+    storageKey: string;
+    storage?: Storage;
+  }) => {
+    const [state, dispatch] = useReducer(reducer, undefined, (): Login[] => {
+      const stored = storage.getItem(storageKey);
+      return typeof stored === 'string' ? (JSON.parse(stored) as Login[]) : [];
+    });
+    useEffect(() => {
+      storage.setItem(storageKey, JSON.stringify(state));
+    }, [state, storageKey, storage]);
+    const value = {
+      logins: state,
+      addLogin: (login: Login) => dispatch({ type: 'login.add', login }),
+      removeLogin: (id: string) => dispatch({ type: 'login.remove', id }),
+      setLogin: (id: string) => dispatch({ type: 'login.set', id }),
+      clearLogins: () => dispatch({ type: 'login.clear' }),
+    };
+    return createElement(NostrLoginContext.Provider, { value }, children);
+  };
+
+  function useNostrLogin() {
+    const context = useContext(NostrLoginContext);
+    if (!context) {
+      throw new Error('useNostrLogin must be used within a NostrLoginProvider');
+    }
+    return context;
+  }
+
+  return { ...actual, NostrLoginProvider, useNostrLogin };
+});
+
 // Mock CSS imports
 vi.mock('*.css', () => ({}));
 vi.mock('*.scss', () => ({}));
