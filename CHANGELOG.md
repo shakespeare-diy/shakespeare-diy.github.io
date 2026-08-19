@@ -1,5 +1,14 @@
 # Changelog
 
+## [9.15.0] - 2026-08-19
+
+### Added
+- Connect to Meridian as an AI provider — available as a one-click preset with streamlined setup
+- Optimize Repository action in the project menu that consolidates git history to reclaim space and repair bloated repositories
+
+### Fixed
+- Zaps now verify the invoice amount before paying, so you're never charged more than you approved
+
 ## [9.14.0] - 2026-06-05
 
 ### Added
