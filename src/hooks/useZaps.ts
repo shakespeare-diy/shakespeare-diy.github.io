@@ -11,6 +11,8 @@ import type { WebLNProvider } from 'webln';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
 import type { NostrEvent } from '@nostrify/nostrify';
+import { assertInvoiceAmount, invoiceCommitsTo } from '@/lib/bolt11';
+import { resolveLnurlPay, type LnurlPayParams } from '@/lib/lnurlPay';
 
 export function useZaps(
   target: Event | Event[],
@@ -180,12 +182,19 @@ export function useZaps(
         return;
       }
 
-      // Get zap endpoint using the old reliable method
-      const zapEndpoint = await nip57.getZapEndpoint(author.data.event);
-      if (!zapEndpoint) {
+      // Resolve the recipient's LNURL-pay endpoint in-repo instead of via
+      // nip57.getZapEndpoint, which returns only the callback URL and discards
+      // the minSendable/maxSendable bounds and metadata needed to validate the
+      // invoice we get back.
+      let lnurlParams: LnurlPayParams;
+      try {
+        lnurlParams = await resolveLnurlPay({ lud06, lud16 });
+      } catch (endpointError) {
         toast({
           title: 'Zap endpoint not found',
-          description: 'Could not find a zap endpoint for the author.',
+          description: endpointError instanceof Error
+            ? endpointError.message
+            : 'Could not find a zap endpoint for the author.',
           variant: 'destructive',
         });
         setIsZapping(false);
@@ -193,6 +202,20 @@ export function useZaps(
       }
 
       const zapAmount = amount * 1000; // convert to millisats
+
+      // The endpoint advertises what it will accept; asking for anything
+      // outside that range can only produce an invoice we'd have to reject.
+      if (zapAmount < lnurlParams.minSendable || zapAmount > lnurlParams.maxSendable) {
+        toast({
+          title: 'Amount out of range',
+          description:
+            `This lightning address accepts between ${Math.ceil(lnurlParams.minSendable / 1000)} and ` +
+            `${Math.floor(lnurlParams.maxSendable / 1000)} sats.`,
+          variant: 'destructive',
+        });
+        setIsZapping(false);
+        return;
+      }
 
       const writeRelays = config.relayMetadata.relays
         .filter(r => r.write)
@@ -209,9 +232,14 @@ export function useZaps(
         throw new Error('No signer available');
       }
       const signedZapRequest = await user.signer.signEvent(zapRequest);
+      const zapRequestJson = JSON.stringify(signedZapRequest);
 
       try {
-        const res = await fetch(`${zapEndpoint}?amount=${zapAmount}&nostr=${encodeURI(JSON.stringify(signedZapRequest))}`);
+        const zapUrl = new URL(lnurlParams.callback);
+        zapUrl.searchParams.set('amount', String(zapAmount));
+        zapUrl.searchParams.set('nostr', zapRequestJson);
+
+        const res = await fetch(zapUrl.toString());
         const responseData = await res.json();
 
         if (!res.ok) {
@@ -223,13 +251,31 @@ export function useZaps(
           throw new Error('Lightning service did not return a valid invoice');
         }
 
+        // The endpoint that produced this invoice is chosen by the recipient,
+        // so the invoice is not trusted: decode it and require that it charges
+        // exactly what the user approved. Without this, the recipient — not the
+        // sender — decides how much the sender pays. Throwing here aborts
+        // before any wallet is touched, on every payment path.
+        const decodedInvoice = assertInvoiceAmount(newInvoice, zapAmount);
+
+        // LUD-06 binds the invoice to the endpoint's `metadata`; NIP-57 binds
+        // it to the zap request instead. Either is fine, anything else means
+        // the invoice was not issued for this request.
+        if (!invoiceCommitsTo(decodedInvoice, [zapRequestJson, lnurlParams.metadata])) {
+          throw new Error('Lightning service returned an invoice for a different request. Payment cancelled.');
+        }
+
+        // Report what the invoice actually charges rather than what was asked
+        // for, so a success screen can never understate a spend.
+        const paidSats = Math.round(decodedInvoice.amountMsat / 1000);
+
         // Get the current active NWC connection dynamically
         const currentNWCConnection = getActiveConnection();
 
         // Try NWC first if available and properly connected
         if (currentNWCConnection && currentNWCConnection.connectionString && currentNWCConnection.isConnected) {
           try {
-            await sendPayment(currentNWCConnection, newInvoice);
+            await sendPayment(currentNWCConnection, newInvoice, zapAmount);
 
             // Clear states immediately on success
             setIsZapping(false);
@@ -237,7 +283,7 @@ export function useZaps(
 
             toast({
               title: 'Zap successful!',
-              description: `You sent ${amount} sats via NWC to the author.`,
+              description: `You sent ${paidSats} sats via NWC to the author.`,
             });
 
             // Invalidate zap queries to refresh counts
@@ -269,7 +315,7 @@ export function useZaps(
 
             toast({
               title: 'Zap successful!',
-              description: `You sent ${amount} sats to the author.`,
+              description: `You sent ${paidSats} sats to the author.`,
             });
 
             // Invalidate zap queries to refresh counts
