@@ -48,21 +48,38 @@ jobs:
           set -eu
           : "${NSYTE_BUNKER:?NSYTE_BUNKER is not set; ask the ngit-ci operator to provision it for this repo alias.}"
 
-          # Pin the binary. An unversioned install has been observed pulling
-          # 0.10.1, which emits legacy kind-34128 events that every current
-          # gateway ignores while still reporting a successful deploy.
-          # nsyte is baked into the coordinator's CI image, alongside zsp and
-          # the rest (armada's .ngit/ci-image/Dockerfile). Downloading it at
-          # job time is the fallback for a coordinator that does not have it,
-          # and is exactly what kept failing here: the 115 MB release asset
-          # broke mid-transfer with "SSL_read: decryption failed or bad record
-          # mac", identically on every attempt within a run, taking
+          # Pin the binary as a FLOOR, not an exact version. An unversioned
+          # install has been observed pulling 0.10.1, which emits legacy
+          # kind-34128 events that every current gateway ignores while still
+          # reporting a successful deploy. 0.28.0 is the floor because it is the
+          # first release whose nostr-tools will encrypt a NIP-44 payload larger
+          # than 64 KiB; under it, signing a large site manifest through the
+          # bunker fails outright.
+          #
+          # nsyte is baked into the coordinator's CI image alongside zsp
+          # (armada's .ngit/ci-image/Dockerfile). Comparing its VERSION rather
+          # than just `command -v` is deliberate: a stale baked binary silently
+          # outranked this pin, which is how deploys kept running 0.27.2 long
+          # after the pin moved. Accepting anything NEWER than the floor lets
+          # the image move ahead of these files without sending every job back
+          # to the download.
+          #
+          # That download is the fallback for a coordinator whose image lacks
+          # nsyte, and is exactly what kept failing here: the ~129 MB release
+          # asset broke mid-transfer with "SSL_read: decryption failed or bad
+          # record mac", identically on every attempt within a run, taking
           # deploy-nsite down across every repo. Hence the loop, HTTP/1.1, and
           # running the binary before trusting it.
-          if command -v nsyte >/dev/null 2>&1; then
-            echo "using the nsyte baked into the runner image"
+          NSYTE_MIN_VERSION=0.28.0
+          # nsyte colours its version output with ANSI escapes even when piped.
+          baked="$(NO_COLOR=1 nsyte --version 2>/dev/null \
+                   | sed 's/\x1b\[[0-9;]*m//g' | awk 'NR == 1 { print $2 }')"
+          oldest="$(printf '%s\n%s\n' "$NSYTE_MIN_VERSION" "$baked" | sort -V | head -1)"
+          if [ -n "$baked" ] && [ "$oldest" = "$NSYTE_MIN_VERSION" ]; then
+            echo "using the nsyte baked into the runner image ($baked)"
           else
-            NSYTE_URL=https://github.com/sandwichfarm/nsyte/releases/download/v0.27.2/nsyte-linux-0.27.2
+            test -z "$baked" || echo "baked nsyte $baked is below $NSYTE_MIN_VERSION; downloading"
+            NSYTE_URL="https://github.com/sandwichfarm/nsyte/releases/download/v${NSYTE_MIN_VERSION}/nsyte-linux-${NSYTE_MIN_VERSION}"
             ok=""
             for attempt in 1 2 3 4 5; do
               if curl -fsSL --http1.1 --retry 2 --retry-delay 5 --retry-all-errors \
