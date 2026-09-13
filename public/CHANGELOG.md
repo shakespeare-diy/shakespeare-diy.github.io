@@ -1,5 +1,20 @@
 # Changelog
 
+## [9.16.0] - 2026-09-13
+
+### Added
+- Take back the sites you published before shakespeare.wtf changed hands — Deploy settings now lists every name that's waiting for you and hands them all back at once, republished under your own key
+- Deploys report which relays accepted your site, and can fill in any that missed it without republishing
+
+### Changed
+- Deploying to Shakespeare now publishes your site to Nostr under your own key, so it stays readable by any Nostr site viewer with or without shakespeare.wtf
+- Recovered sites are titled whatever they call themselves rather than after their web address
+
+### Fixed
+- Deploying to Shakespeare works again — it had been reporting success while changing nothing, because the host it uploaded to no longer serves those addresses
+- New accounts start with Shakespeare set up as a deployment target instead of an empty screen
+- Deployment provider settings now scroll, so Save is always reachable
+
 ## [9.15.0] - 2026-08-19
 
 ### Added
