@@ -1,6 +1,7 @@
 import z from 'zod';
 import { filteredArray } from '@/lib/schema';
 import { AI_PROVIDER_PRESETS } from '@/lib/aiProviderPresets';
+import { DEFAULT_DEPLOY_PROVIDERS, migrateDeployProvider } from '@/lib/deployProviderPresets';
 import type { JSRuntimeFS } from '@/lib/JSRuntime';
 import type { AISettings, MCPServer } from '@/contexts/AISettingsContext';
 import type { GitSettings, GitCredential } from '@/contexts/GitSettingsContext';
@@ -90,9 +91,12 @@ const baseDeployProviderSchema = z.object({
   proxy: z.boolean().optional(),
 });
 
-const shakespeareDeployProviderSchema = baseDeployProviderSchema.extend({
-  type: z.literal('shakespeare'),
-  host: z.string().optional(),
+const npanelProviderSchema = baseDeployProviderSchema.extend({
+  type: z.literal('npanel'),
+  dashboardHost: z.string(),
+  domain: z.string(),
+  relayUrls: z.array(z.string()),
+  blossomServers: z.array(z.string()),
 });
 
 const netlifyProviderSchema = baseDeployProviderSchema.extend({
@@ -137,7 +141,7 @@ const railwayProviderSchema = baseDeployProviderSchema.extend({
 });
 
 const deployProviderSchema: z.ZodType<DeployProvider> = z.discriminatedUnion('type', [
-  shakespeareDeployProviderSchema,
+  npanelProviderSchema,
   netlifyProviderSchema,
   vercelProviderSchema,
   nsiteProviderSchema,
@@ -314,24 +318,44 @@ export async function writeGitSettings(fs: JSRuntimeFS, settings: GitSettings, c
 
 /**
  * Read Deploy settings from VFS
+ *
+ * A user with no settings file is not the same as a user who removed every
+ * provider, and the difference is what a new user sees the first time they open
+ * the deploy button: the default gateway, or an empty screen asking them to
+ * choose a host. Both used to answer "no providers", so the default had never
+ * actually reached anybody — it was written, saved back as an empty list on the
+ * next render, and gone.
+ *
  * @param fs - Filesystem instance
  * @param configPath - Custom config path (default: /config)
  */
 export async function readDeploySettings(fs: JSRuntimeFS, configPath = '/config'): Promise<DeploySettings> {
-  const defaultSettings: DeploySettings = {
-    providers: [],
-  };
+  const deployConfigPath = getDeployConfigPath(configPath);
+
+  let content: string;
+  try {
+    content = await fs.readFile(deployConfigPath, 'utf8');
+  } catch {
+    // A copy, so the caller editing its providers can't reach back into the
+    // module-level defaults every other caller will be handed.
+    return { providers: [...DEFAULT_DEPLOY_PROVIDERS] };
+  }
 
   try {
-    const deployConfigPath = getDeployConfigPath(configPath);
-    const content = await fs.readFile(deployConfigPath, 'utf8');
-    const data = JSON.parse(content);
-    return deploySettingsSchema.parse(data);
+    const data = JSON.parse(content) as { providers?: unknown };
+    const migrated = {
+      ...data,
+      providers: Array.isArray(data?.providers) ? data.providers.map(migrateDeployProvider) : data?.providers,
+    };
+    return deploySettingsSchema.parse(migrated);
   } catch (error) {
+    // A file that exists and cannot be read is a different problem from one that
+    // isn't there: handing back the defaults would silently replace whatever the
+    // user had, so this keeps nothing rather than inventing something.
     if (error instanceof z.ZodError) {
       console.error('Deploy settings parsing error:', error.issues);
     }
-    return defaultSettings;
+    return { providers: [] };
   }
 }
 

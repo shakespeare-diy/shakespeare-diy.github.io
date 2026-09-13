@@ -9,7 +9,7 @@ import { useVercelOAuth } from '@/hooks/useVercelOAuth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import type { DeployProvider } from '@/contexts/DeploySettingsContext';
 import type { PresetDeployProvider } from '@/lib/deploy/types';
-import { PRESET_DEPLOY_PROVIDERS, DEFAULT_NSITE_PROVIDER } from '@/lib/deployProviderPresets';
+import { PRESET_DEPLOY_PROVIDERS, DEFAULT_NPANEL_PROVIDER, DEFAULT_NSITE_PROVIDER } from '@/lib/deployProviderPresets';
 import { ExternalFavicon } from '@/components/ExternalFavicon';
 import { ProviderConfigDialog } from '@/components/ProviderConfigDialog';
 import { AddDeployProviderDialog } from '@/components/AddDeployProviderDialog';
@@ -182,25 +182,20 @@ export function DeploySettings() {
   };
 
   const handleAddPresetProvider = (preset: PresetDeployProvider, apiKey: string, accountId?: string, organizationId?: string) => {
-    // For Shakespeare, just check if user is logged in
+    // Nostr-authenticated providers need a login rather than a key
     if (preset.requiresNostr && !user) {
       return;
     }
 
-    // For non-Shakespeare/non-nsite providers, require API key
+    // Everything else is reached with an API key, except plain nsite
     if (!preset.requiresNostr && preset.type !== 'nsite' && !apiKey?.trim()) {
       return;
     }
 
     let newProvider: DeployProvider;
 
-    if (preset.type === 'shakespeare') {
-      newProvider = {
-        id: preset.id, // Use preset ID for presets
-        name: preset.name,
-        type: 'shakespeare',
-        ...(preset.proxy && { proxy: true }),
-      };
+    if (preset.type === 'npanel') {
+      newProvider = { ...DEFAULT_NPANEL_PROVIDER, id: preset.id, name: preset.name };
     } else if (preset.type === 'nsite') {
       newProvider = { ...DEFAULT_NSITE_PROVIDER };
     } else if (preset.type === 'netlify') {

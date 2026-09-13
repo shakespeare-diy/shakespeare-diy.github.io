@@ -3,11 +3,14 @@ import { z } from 'zod';
 import { useFS } from './useFS';
 import { useFSPaths } from './useFSPaths';
 
-const shakespeareProjectConfigSchema = z.object({
-  type: z.literal('shakespeare'),
+const npanelProjectConfigSchema = z.object({
+  type: z.literal('npanel'),
   url: z.string(),
   data: z.object({
+    /** The single label in front of the gateway's domain. */
     subdomain: z.string().optional(),
+    siteTitle: z.string().optional(),
+    siteDescription: z.string().optional(),
   }),
 });
 
@@ -71,7 +74,7 @@ const railwayProjectConfigSchema = z.object({
 });
 
 const projectProviderConfigSchema = z.discriminatedUnion('type', [
-  shakespeareProjectConfigSchema,
+  npanelProjectConfigSchema,
   nsiteProjectConfigSchema,
   netlifyProjectConfigSchema,
   vercelProjectConfigSchema,
@@ -85,7 +88,7 @@ const projectDeploySettingsSchema = z.object({
   currentProvider: z.string().optional(),
 });
 
-export type ShakespeareProjectConfig = z.infer<typeof shakespeareProjectConfigSchema>;
+export type NpanelProjectConfig = z.infer<typeof npanelProjectConfigSchema>;
 export type NsiteProjectConfig = z.infer<typeof nsiteProjectConfigSchema>;
 export type NetlifyProjectConfig = z.infer<typeof netlifyProjectConfigSchema>;
 export type VercelProjectConfig = z.infer<typeof vercelProjectConfigSchema>;
@@ -94,6 +97,24 @@ export type DenoDeployProjectConfig = z.infer<typeof denoDeployProjectConfigSche
 export type RailwayProjectConfig = z.infer<typeof railwayProjectConfigSchema>;
 export type ProjectProviderConfig = z.infer<typeof projectProviderConfigSchema>;
 export type ProjectDeploySettings = z.infer<typeof projectDeploySettingsSchema>;
+
+/**
+ * Bring a record written by an older version up to date.
+ *
+ * `shakespeare` deploys became `npanel` ones against the same domain, and the
+ * subdomain carries straight over. Worth doing rather than letting the schema
+ * reject it: this file holds one record per provider a project has ever
+ * deployed to, so a single unparseable entry would take a Netlify site id and a
+ * Vercel project id down with it.
+ */
+function migrateProjectProviderConfig(config: unknown): unknown {
+  if (typeof config !== 'object' || config === null) return config;
+
+  const candidate = config as Record<string, unknown>;
+  if (candidate.type !== 'shakespeare') return config;
+
+  return { ...candidate, type: 'npanel' };
+}
 
 /**
  * Hook to manage project-specific deployment settings
@@ -118,10 +139,20 @@ export function useProjectDeploySettings(projectId: string | null) {
     try {
       setIsLoading(true);
       const content = await fs.fs.readFile(settingsPath, 'utf8');
-      const parsed = JSON.parse(content as string);
+      const parsed = JSON.parse(content as string) as { providers?: Record<string, unknown> };
+
+      const migrated = {
+        ...parsed,
+        providers: Object.fromEntries(
+          Object.entries(parsed?.providers ?? {}).map(([id, config]) => [
+            id,
+            migrateProjectProviderConfig(config),
+          ]),
+        ),
+      };
 
       // Validate with Zod
-      const validated = projectDeploySettingsSchema.parse(parsed);
+      const validated = projectDeploySettingsSchema.parse(migrated);
       setSettings(validated);
     } catch (error) {
       // File doesn't exist, is invalid JSON, or doesn't match schema - use empty settings

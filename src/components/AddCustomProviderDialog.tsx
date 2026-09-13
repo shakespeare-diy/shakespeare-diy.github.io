@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type {
-  ShakespeareDeployProvider,
+  NpanelProvider,
   NetlifyProvider,
   VercelProvider,
   NsiteProvider,
@@ -34,7 +34,7 @@ import type {
 
 // Type for provider without the 'id' field (will be generated)
 type DeployProviderInput =
-  | Omit<ShakespeareDeployProvider, 'id'>
+  | Omit<NpanelProvider, 'id'>
   | Omit<NetlifyProvider, 'id'>
   | Omit<VercelProvider, 'id'>
   | Omit<NsiteProvider, 'id'>
@@ -54,14 +54,14 @@ export function AddCustomProviderDialog({
   onAdd,
 }: AddCustomProviderDialogProps) {
   const { t } = useTranslation();
-  const [customProviderType, setCustomProviderType] = useState<'shakespeare' | 'netlify' | 'vercel' | 'nsite' | 'cloudflare' | 'deno' | 'railway' | ''>('');
+  const [customProviderType, setCustomProviderType] = useState<'npanel' | 'netlify' | 'vercel' | 'nsite' | 'cloudflare' | 'deno' | 'railway' | ''>('');
   const [customName, setCustomName] = useState('');
   const [customApiKey, setCustomApiKey] = useState('');
   const [customAccountId, setCustomAccountId] = useState('');
   const [customOrganizationId, setCustomOrganizationId] = useState('');
   const [customBaseURL, setCustomBaseURL] = useState('');
   const [customBaseDomain, setCustomBaseDomain] = useState('');
-  const [customHost, setCustomHost] = useState('');
+  const [customDashboardHost, setCustomDashboardHost] = useState('');
   const [customProxy, setCustomProxy] = useState(false);
   const [customGateway, setCustomGateway] = useState('');
   const [customRelayUrls, setCustomRelayUrls] = useState<string[]>([]);
@@ -73,12 +73,15 @@ export function AddCustomProviderDialog({
     // Build provider object based on type
     let provider: DeployProviderInput;
 
-    if (customProviderType === 'shakespeare') {
+    if (customProviderType === 'npanel') {
+      if (!customDashboardHost.trim() || !customGateway.trim()) return;
       provider = {
-        type: 'shakespeare',
+        type: 'npanel',
         name: customName.trim(),
-        ...(customHost?.trim() && { host: customHost.trim() }),
-        ...(customProxy && { proxy: true }),
+        dashboardHost: customDashboardHost.trim(),
+        domain: customGateway.trim(),
+        relayUrls: customRelayUrls.length > 0 ? customRelayUrls : ['wss://relay.ditto.pub'],
+        blossomServers: customBlossomServers.length > 0 ? customBlossomServers : ['https://blossom.ditto.pub/', 'https://blossom.dreamith.to/'],
       };
     } else if (customProviderType === 'nsite') {
       provider = {
@@ -151,7 +154,7 @@ export function AddCustomProviderDialog({
     setCustomOrganizationId('');
     setCustomBaseURL('');
     setCustomBaseDomain('');
-    setCustomHost('');
+    setCustomDashboardHost('');
     setCustomProxy(false);
     setCustomGateway('');
     setCustomRelayUrls([]);
@@ -160,12 +163,22 @@ export function AddCustomProviderDialog({
     onOpenChange(false);
   };
 
-  const isValid = customProviderType && customName.trim() &&
-    (customProviderType === 'shakespeare' || customProviderType === 'nsite' ||
-      (customApiKey.trim() &&
-        (customProviderType !== 'cloudflare' || customAccountId.trim()) &&
-        (customProviderType !== 'deno' || customOrganizationId.trim()) &&
-        (customProviderType !== 'railway' || true)));
+  const hasRequiredFields = () => {
+    // A gateway is named by two hosts and reached with a Nostr key, so there is
+    // no API key to ask for — but it cannot be guessed at either.
+    if (customProviderType === 'npanel') {
+      return Boolean(customDashboardHost.trim() && customGateway.trim());
+    }
+    // Plain nsite needs nothing beyond a name: it has defaults for the rest.
+    if (customProviderType === 'nsite') return true;
+
+    if (!customApiKey.trim()) return false;
+    if (customProviderType === 'cloudflare') return Boolean(customAccountId.trim());
+    if (customProviderType === 'deno') return Boolean(customOrganizationId.trim());
+    return true;
+  };
+
+  const isValid = Boolean(customProviderType && customName.trim() && hasRequiredFields());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -184,7 +197,7 @@ export function AddCustomProviderDialog({
             </Label>
             <Select
               value={customProviderType}
-              onValueChange={(value: 'shakespeare' | 'netlify' | 'vercel' | 'nsite' | 'cloudflare' | 'deno' | 'railway') => {
+              onValueChange={(value: 'npanel' | 'netlify' | 'vercel' | 'nsite' | 'cloudflare' | 'deno' | 'railway') => {
                 setCustomProviderType(value);
                 // Reset form when provider type changes
                 setCustomApiKey('');
@@ -192,7 +205,7 @@ export function AddCustomProviderDialog({
                 setCustomOrganizationId('');
                 setCustomBaseURL('');
                 setCustomBaseDomain('');
-                setCustomHost('');
+                setCustomDashboardHost('');
                 setCustomProxy(false);
                 setCustomGateway('');
                 setCustomRelayUrls([]);
@@ -203,7 +216,7 @@ export function AddCustomProviderDialog({
                 <SelectValue placeholder={t('selectProviderType')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="shakespeare">Shakespeare Deploy</SelectItem>
+                <SelectItem value="npanel">nsite gateway</SelectItem>
                 <SelectItem value="nsite">nsite</SelectItem>
                 <SelectItem value="netlify">Netlify</SelectItem>
                 <SelectItem value="vercel">Vercel</SelectItem>
@@ -228,20 +241,53 @@ export function AddCustomProviderDialog({
                 />
               </div>
 
-              {customProviderType === 'shakespeare' ? (
+              {customProviderType === 'npanel' ? (
                 <>
                   <p className="text-sm text-muted-foreground">
                     {t('shakespeareDeployNostrAuth')}
                   </p>
                   <div className="grid gap-2">
-                    <Label htmlFor="custom-host">Host (Optional)</Label>
+                    <Label htmlFor="custom-domain">
+                      Domain <span className="text-destructive">*</span>
+                    </Label>
                     <Input
-                      id="custom-host"
+                      id="custom-domain"
                       placeholder="shakespeare.wtf"
-                      value={customHost}
-                      onChange={(e) => setCustomHost(e.target.value)}
+                      value={customGateway}
+                      onChange={(e) => setCustomGateway(e.target.value)}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Sites get a name under this domain.
+                    </p>
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="custom-dashboard-host">
+                      Gateway API <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="custom-dashboard-host"
+                      placeholder="npanel.shakespeare.to"
+                      value={customDashboardHost}
+                      onChange={(e) => setCustomDashboardHost(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Where names are claimed. Usually a different host from the one above.
+                    </p>
+                  </div>
+                  <UrlListEditor
+                    label="Relay URLs"
+                    items={customRelayUrls}
+                    onChange={setCustomRelayUrls}
+                    protocol="wss"
+                    placeholder="relay.ditto.pub"
+                  />
+                  <UrlListEditor
+                    label="Blossom Servers"
+                    items={customBlossomServers}
+                    onChange={setCustomBlossomServers}
+                    protocol="https"
+                    placeholder="blossom.ditto.pub"
+                  />
                 </>
               ) : customProviderType === 'nsite' ? (
                 <>

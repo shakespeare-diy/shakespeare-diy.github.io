@@ -5,10 +5,20 @@ export interface BaseDeployProvider {
   name: string;
 }
 
-export interface ShakespeareDeployProvider extends BaseDeployProvider {
-  type: 'shakespeare';
-  host?: string;
-  proxy?: boolean;
+/**
+ * A gateway that serves nsites under a domain it hands out names on.
+ *
+ * The site is an ordinary nsite under the user's own key; what the gateway adds
+ * is the hostname, which it has to be asked for. `dashboardHost` is where that
+ * asking happens and `domain` is what the site is served under — usually two
+ * different names, and never assumed to be the same one.
+ */
+export interface NpanelProvider extends BaseDeployProvider {
+  type: 'npanel';
+  dashboardHost: string;
+  domain: string;
+  relayUrls: string[];
+  blossomServers: string[];
 }
 
 export interface NetlifyProvider extends BaseDeployProvider {
@@ -57,7 +67,7 @@ export interface RailwayProvider extends BaseDeployProvider {
   proxy?: boolean;
 }
 
-export type DeployProvider = ShakespeareDeployProvider | NetlifyProvider | VercelProvider | NsiteProvider | CloudflareProvider | DenoDeployProvider | RailwayProvider;
+export type DeployProvider = NpanelProvider | NetlifyProvider | VercelProvider | NsiteProvider | CloudflareProvider | DenoDeployProvider | RailwayProvider;
 
 export interface DeploySettings {
   providers: DeployProvider[];

@@ -11,6 +11,7 @@ import type { JSRuntimeFS } from './JSRuntime';
 import type { AISettings } from '@/contexts/AISettingsContext';
 import type { GitSettings } from '@/contexts/GitSettingsContext';
 import type { DeploySettings } from '@/contexts/DeploySettingsContext';
+import { DEFAULT_DEPLOY_PROVIDERS } from '@/lib/deployProviderPresets';
 
 // Mock filesystem
 const createMockFS = (): JSRuntimeFS => ({
@@ -278,7 +279,11 @@ describe('configUtils', () => {
         {
           id: 'provider-3',
           name: 'Shakespeare',
-          type: 'shakespeare',
+          type: 'npanel',
+          dashboardHost: 'npanel.shakespeare.to',
+          domain: 'shakespeare.wtf',
+          relayUrls: ['wss://relay.ditto.pub'],
+          blossomServers: ['https://blossom.ditto.pub'],
         },
         {
           id: 'provider-4',
@@ -300,13 +305,38 @@ describe('configUtils', () => {
         expect(result).toEqual(sampleDeploySettings);
       });
 
-      it('should return default settings if file does not exist', async () => {
+      it('should offer the default provider when no settings have been saved', async () => {
         vi.mocked(mockFS.readFile).mockRejectedValue(new Error('File not found'));
 
         const result = await readDeploySettings(mockFS);
 
-        expect(result).toEqual({
-          providers: [],
+        expect(result).toEqual({ providers: DEFAULT_DEPLOY_PROVIDERS });
+      });
+
+      it('should keep nothing when a saved file cannot be read', async () => {
+        // Distinct from having no file at all: handing back the defaults here
+        // would quietly replace whatever the user had configured.
+        vi.mocked(mockFS.readFile).mockResolvedValue('{"providers": "not an array"}');
+
+        const result = await readDeploySettings(mockFS);
+
+        expect(result).toEqual({ providers: [] });
+      });
+
+      it('should migrate a provider saved before the gateway existed', async () => {
+        vi.mocked(mockFS.readFile).mockResolvedValue(
+          JSON.stringify({
+            providers: [{ id: 'shakespeare', name: 'Shakespeare Deploy', type: 'shakespeare', host: 'shakespeare.wtf' }],
+          }),
+        );
+
+        const result = await readDeploySettings(mockFS);
+
+        expect(result.providers).toHaveLength(1);
+        expect(result.providers[0]).toMatchObject({
+          id: 'shakespeare',
+          type: 'npanel',
+          domain: 'shakespeare.wtf',
         });
       });
 

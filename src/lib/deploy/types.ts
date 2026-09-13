@@ -20,14 +20,6 @@ export interface DeployAdapter {
   deploy(options: DeployOptions): Promise<DeployResult>;
 }
 
-export interface ShakespeareDeployConfig {
-  fs: JSRuntimeFS;
-  signer: NostrSigner;
-  host?: string;
-  subdomain?: string;
-  corsProxy?: string;
-}
-
 export interface NetlifyDeployConfig {
   fs: JSRuntimeFS;
   apiKey: string;
@@ -68,6 +60,26 @@ export interface NsiteDeployConfig {
   siteIdentifier?: string;
 }
 
+/**
+ * A gateway that serves an nsite under a name it holds for you.
+ *
+ * `siteIdentifier` is not configurable: the gateway's hostname and the site's
+ * `d` tag are the same label, so that a second gateway asked to serve the site
+ * lands on the same name.
+ */
+export interface NpanelDeployConfig extends Omit<NsiteDeployConfig, 'siteIdentifier'> {
+  /**
+   * The gateway's dashboard hostname, which is also its API origin — the `u`
+   * tag of every NIP-98 request has to name it, so it is not interchangeable
+   * with the domain sites are served under.
+   */
+  dashboardHost: string;
+  /** The domain the site is served under, e.g. `shakespeare.wtf`. */
+  domain: string;
+  /** The single label in front of {@link domain}, and the site's `d` tag. */
+  subdomain: string;
+}
+
 export interface CloudflareDeployConfig {
   fs: JSRuntimeFS;
   apiKey: string;
@@ -103,7 +115,7 @@ export interface RailwayDeployConfig {
 
 export interface PresetDeployProvider {
   id: string;
-  type: 'shakespeare' | 'netlify' | 'vercel' | 'nsite' | 'cloudflare' | 'deno' | 'railway';
+  type: 'npanel' | 'netlify' | 'vercel' | 'nsite' | 'cloudflare' | 'deno' | 'railway';
   name: string;
   description: string;
   baseURL?: string;
