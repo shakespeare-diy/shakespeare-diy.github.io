@@ -4,6 +4,7 @@ import { nip19 } from 'nostr-tools';
 import type { JSRuntimeFS } from '../JSRuntime';
 import type { DeployAdapter, DeployOptions, DeployResult, NsiteDeployConfig } from './types';
 import { buildNsiteUrl } from '../utils/nsite';
+import { publishToRelays } from './publishToRelays';
 
 /** nsite v2 root-site kind (replaceable by pubkey+kind) */
 const NSITE_ROOT_SITE_KIND = 15128;
@@ -296,9 +297,6 @@ export class NsiteAdapter implements DeployAdapter {
     const pubkey = await this.signer.getPublicKey();
     const npub = nip19.npubEncode(pubkey);
 
-    // Create grouped relay client
-    const relayClient = this.nostr.group(this.relayUrls);
-
     // ── Step 1: Walk dist/ and read + hash all files ──────────────────────────
     const files: FileEntry[] = [];
     await this.collectFiles(distPath, '', files);
@@ -403,7 +401,11 @@ export class NsiteAdapter implements DeployAdapter {
     // ── Step 5: Publish manifest ──────────────────────────────────────────────
     // Relay and server hints are embedded as tags in the manifest itself —
     // no separate kind 10002 or kind 10063 events are published.
-    await relayClient.event(manifestEvent, { signal: AbortSignal.timeout(10_000) });
+    //
+    // Relay by relay, because the site is only as findable as the relays that
+    // actually took it, and publishing to the group as a whole reports success
+    // the moment one of them does — throwing away what the others said.
+    const publish = await publishToRelays(this.nostr, manifestEvent, this.relayUrls);
 
     // Build the canonical deployed URL (always the long-form base36 or npub URL)
     const siteUrl = buildNsiteUrl({
@@ -433,6 +435,9 @@ export class NsiteAdapter implements DeployAdapter {
         manifestKind,
         vanityUrl,
         canonicalUrl: siteUrl,
+        eventId: manifestEvent.id,
+        relaysAccepted: publish.accepted,
+        relaysRejected: publish.rejected,
       },
     };
   }

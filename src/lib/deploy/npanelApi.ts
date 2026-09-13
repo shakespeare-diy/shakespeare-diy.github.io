@@ -73,6 +73,17 @@ export interface NpanelClaim {
   mine: boolean;
   /** The archive's copy, when there is one to republish. Null when `mine`. */
   manifest: NpanelClaimManifest | null;
+  /**
+   * Whether this name has already been taken back.
+   *
+   * Absent from gateways that predate the field, which is why it is optional
+   * rather than assumed false: a list of waiting names is what `GET /api/claims`
+   * has always returned, so a missing flag means the row is waiting.
+   */
+  claimed?: boolean;
+  /** What the site calls itself, where the gateway could work it out. */
+  suggestedTitle?: string | null;
+  suggestedDescription?: string | null;
 }
 
 /**
@@ -80,13 +91,20 @@ export interface NpanelClaim {
  *
  * Empty for anyone with nothing waiting, which is almost everyone — this is the
  * residue of one migration, not a feature of the gateway.
+ *
+ * `taken` also returns names already claimed, which is how an app fixes
+ * something about how it claimed them. Older gateways ignore the parameter and
+ * answer with the waiting ones, which is a smaller answer rather than a wrong
+ * one.
  */
 export async function fetchNpanelClaims(
   dashboardHost: string,
   signer: NostrSigner,
   signal?: AbortSignal,
+  opts: { taken?: boolean } = {},
 ): Promise<NpanelClaim[]> {
-  const response = await npanelRequest(dashboardHost, signer, 'GET', '/api/claims', undefined, signal);
+  const path = opts.taken ? '/api/claims?taken=1' : '/api/claims';
+  const response = await npanelRequest(dashboardHost, signer, 'GET', path, undefined, signal);
 
   if (!response.ok) {
     throw await npanelError(response, 'Could not ask the gateway which names are waiting for you');
