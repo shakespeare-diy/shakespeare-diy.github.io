@@ -7,13 +7,15 @@ import { useDeploySettings } from '@/hooks/useDeploySettings';
 import { useNetlifyOAuth } from '@/hooks/useNetlifyOAuth';
 import { useVercelOAuth } from '@/hooks/useVercelOAuth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import type { DeployProvider } from '@/contexts/DeploySettingsContext';
+import type { DeployProvider, NpanelProvider } from '@/contexts/DeploySettingsContext';
 import type { PresetDeployProvider } from '@/lib/deploy/types';
 import { PRESET_DEPLOY_PROVIDERS, DEFAULT_NPANEL_PROVIDER, DEFAULT_NSITE_PROVIDER } from '@/lib/deployProviderPresets';
 import { ExternalFavicon } from '@/components/ExternalFavicon';
 import { ProviderConfigDialog } from '@/components/ProviderConfigDialog';
 import { AddDeployProviderDialog } from '@/components/AddDeployProviderDialog';
 import { AddCustomProviderDialog } from '@/components/AddCustomProviderDialog';
+import { NpanelMigrationDialog } from '@/components/deploy/NpanelMigrationDialog';
+import { Button } from '@/components/ui/button';
 import {
   DndContext,
   closestCenter,
@@ -150,6 +152,7 @@ export function DeploySettings() {
   const [selectedPreset, setSelectedPreset] = useState<PresetDeployProvider | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [customProviderDialogOpen, setCustomProviderDialogOpen] = useState(false);
+  const [migratingProvider, setMigratingProvider] = useState<NpanelProvider | null>(null);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -339,6 +342,38 @@ export function DeploySettings() {
                 </SortableContext>
               </DndContext>
             </div>
+          )}
+
+          {/* Sites held for their previous owner on a gateway that took over a
+              domain. Shown without asking the gateway first: finding out costs
+              a signature, and a signing prompt nobody asked for is worse than a
+              button that sometimes opens an empty list. */}
+          {user && settings.providers.map((provider) => (
+            provider.type === 'npanel' ? (
+              <div
+                key={`migrate-${provider.id}`}
+                className="rounded-lg border border-dashed p-4 flex flex-wrap items-center justify-between gap-3"
+              >
+                <div className="space-y-1">
+                  <h4 className="text-sm font-medium">Sites from before {provider.name}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Names you published on {provider.domain} under the old host are being served
+                    from an archive until you take them back.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => setMigratingProvider(provider)}>
+                  Take back sites
+                </Button>
+              </div>
+            ) : null
+          ))}
+
+          {migratingProvider && (
+            <NpanelMigrationDialog
+              open
+              onOpenChange={(open) => !open && setMigratingProvider(null)}
+              provider={migratingProvider}
+            />
           )}
 
           {/* Provider Config Dialog */}

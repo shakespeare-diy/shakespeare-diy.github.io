@@ -1,14 +1,10 @@
-import { NIP98 } from '@nostrify/nostrify';
-import { N64 } from '@nostrify/nostrify/utils';
 import type { NostrSigner } from '@nostrify/nostrify';
 import type { DeployAdapter, DeployOptions, DeployResult, NpanelDeployConfig } from './types';
 import { NsiteAdapter } from './NsiteAdapter';
+import { NPANEL_TIMEOUT_MS, npanelError, npanelRequest } from './npanelApi';
 
 /** nsite named-site kind. An npanel host always points at one of these. */
 const NAMED_SITE_KIND = 35128;
-
-/** Timeout for a single API call (ms). */
-const FETCH_TIMEOUT_MS = 15_000;
 
 /** What `GET /api/hosts/:hostname/available` answers. */
 export interface NameAvailability {
@@ -38,7 +34,7 @@ export async function checkNameAvailable(
   const url = `https://${dashboardHost}/api/hosts/${encodeURIComponent(hostname)}/available`;
 
   try {
-    const response = await fetch(url, { signal: signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const response = await fetch(url, { signal: signal ?? AbortSignal.timeout(NPANEL_TIMEOUT_MS) });
     if (!response.ok) return { hostname, available: true };
     return (await response.json()) as NameAvailability;
   } catch {
@@ -146,37 +142,12 @@ export class NpanelAdapter implements DeployAdapter {
   }
 
   /** A NIP-98 request to the gateway's API. */
-  private async request(method: string, path: string, body?: unknown): Promise<Response> {
-    const url = `https://${this.dashboardHost}${path}`;
-
-    let request = new Request(url, {
-      method,
-      ...(body === undefined
-        ? {}
-        : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
-    });
-
-    // Signed against the URL being requested, so the token authorizes this call
-    // and no other. No CORS proxy: npanel answers browsers directly, and a proxy
-    // would rewrite the URL out from under the signature.
-    const template = await NIP98.template(request);
-    const event = await this.signer.signEvent(template);
-
-    const headers = new Headers(request.headers);
-    headers.set('Authorization', `Nostr ${N64.encodeEvent(event)}`);
-    request = new Request(request, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-
-    return await fetch(request);
+  private request(method: string, path: string, body?: unknown): Promise<Response> {
+    return npanelRequest(this.dashboardHost, this.signer, method, path, body);
   }
 
   /** The gateway's own sentence about a failure, which is written to be read. */
-  private async error(response: Response, fallback: string): Promise<Error> {
-    const body = await response.json().catch(() => null) as { error?: string } | null;
-
-    if (response.status === 403 && !body?.error) {
-      return new Error(`${fallback}: this gateway is not accepting new sites right now.`);
-    }
-
-    return new Error(body?.error ?? `${fallback} (HTTP ${response.status}).`);
+  private error(response: Response, fallback: string): Promise<Error> {
+    return npanelError(response, fallback);
   }
 }

@@ -79,8 +79,8 @@ export function ProviderConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <div className="flex items-center gap-2">
             <ExternalFavicon
               url={gatewayUrl || baseURL}
@@ -94,7 +94,10 @@ export function ProviderConfigDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        {/* The fields scroll, the buttons don't: a provider with relay and
+            blossom lists is taller than a phone, and a Save button below the
+            fold is a Save button nobody can press. */}
+        <div className="flex-1 overflow-y-auto space-y-4 py-4 px-1 -mx-1">
           <div className="grid gap-2">
             <Label htmlFor="provider-name">
               Name <span className="text-destructive">*</span>
@@ -303,7 +306,7 @@ export function ProviderConfigDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 shrink-0">
           <Button
             variant="destructive"
             onClick={handleDelete}
