@@ -1,5 +1,13 @@
 # Changelog
 
+## [9.16.2] - 2026-09-13
+
+### Changed
+- Deploy settings now says how many of your names are waiting to be taken back, and stays quiet when there are none
+
+### Fixed
+- Names you published before shakespeare.wtf changed hands are recognized as yours as you type them — the Deploy screen offers to hand them back instead of reporting them taken by somebody else
+
 ## [9.16.1] - 2026-09-13
 
 ### Fixed
