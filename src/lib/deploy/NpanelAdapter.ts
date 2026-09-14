@@ -10,7 +10,13 @@ const NAMED_SITE_KIND = 35128;
 export interface NameAvailability {
   hostname: string;
   available: boolean;
-  reason?: 'taken' | 'invalid';
+  /**
+   * Why it is not free, or — with `available` — that it is not free of somebody
+   * else. `mine` comes only from a signed request, and only from a gateway new
+   * enough to answer one; an older one says `taken` and is not wrong, just less
+   * use to the person who owns the name.
+   */
+  reason?: 'taken' | 'invalid' | 'mine';
   /** Present when `reason` is `invalid`; written to be shown to whoever typed it. */
   error?: string;
 }
@@ -18,9 +24,15 @@ export interface NameAvailability {
 /**
  * Ask whether a name can still be claimed.
  *
- * Unauthenticated, and deliberately so: someone choosing a name has not decided
- * to make an account yet, and making them prove who they are to find out their
- * first choice is taken would be a strange order to do things in.
+ * Asked anonymously first, and deliberately so: someone choosing a name has not
+ * decided to make an account yet, and making them prove who they are to find out
+ * their first choice is taken would be a strange order to do things in.
+ *
+ * A name that comes back taken is then asked about again, signed, because
+ * "taken" and "taken by you" are the same answer to a stranger and opposite
+ * answers to the person about to deploy. Only on that branch: a free name is the
+ * common case while somebody is picking one, and signing every keystroke would
+ * put a remote signer on the other end of the typing.
  *
  * A network failure answers `available: true` rather than blocking the person.
  * Being wrong that way costs a clear error at deploy time; being wrong the other
@@ -30,13 +42,23 @@ export async function checkNameAvailable(
   dashboardHost: string,
   hostname: string,
   signal?: AbortSignal,
+  signer?: NostrSigner,
 ): Promise<NameAvailability> {
-  const url = `https://${dashboardHost}/api/hosts/${encodeURIComponent(hostname)}/available`;
+  const path = `/api/hosts/${encodeURIComponent(hostname)}/available`;
 
   try {
-    const response = await fetch(url, { signal: signal ?? AbortSignal.timeout(NPANEL_TIMEOUT_MS) });
+    const response = await fetch(`https://${dashboardHost}${path}`, {
+      signal: signal ?? AbortSignal.timeout(NPANEL_TIMEOUT_MS),
+    });
     if (!response.ok) return { hostname, available: true };
-    return (await response.json()) as NameAvailability;
+
+    const availability = (await response.json()) as NameAvailability;
+    if (availability.available || availability.reason !== 'taken' || !signer) return availability;
+
+    const asOwner = await npanelRequest(dashboardHost, signer, 'GET', path, undefined, signal);
+    if (!asOwner.ok) return availability;
+
+    return (await asOwner.json()) as NameAvailability;
   } catch {
     return { hostname, available: true };
   }

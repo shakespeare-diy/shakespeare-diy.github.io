@@ -222,4 +222,52 @@ describe('checkNameAvailable', () => {
       available: true,
     });
   });
+
+  it('asks again as the signer when a name comes back taken', async () => {
+    // "Taken" and "taken by you" are the same word to a stranger and opposite
+    // answers to the person about to deploy.
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ hostname: `x.${DOMAIN}`, available: false, reason: 'taken' })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ hostname: `x.${DOMAIN}`, available: true, reason: 'mine' })),
+      );
+
+    await expect(
+      checkNameAvailable(DASHBOARD_HOST, `x.${DOMAIN}`, undefined, signer),
+    ).resolves.toMatchObject({ available: true, reason: 'mine' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // The first ask carries nothing; only the second spends a signature.
+    const [, anonymous] = fetchMock.mock.calls[0];
+    expect((anonymous as RequestInit | undefined)?.headers).toBeUndefined();
+
+    const signed = fetchMock.mock.calls[1][0] as Request;
+    expect(signed.headers.get('Authorization')).toMatch(/^Nostr /);
+    expect(signed.url).toBe(`https://${DASHBOARD_HOST}/api/hosts/x.${DOMAIN}/available`);
+  });
+
+  it('spends no signature on a name that is free', async () => {
+    // Picking a new name is the common case, and a remote signer on the other
+    // end of every keystroke is not something to spend it on.
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ hostname: 'x', available: true })));
+
+    await checkNameAvailable(DASHBOARD_HOST, `x.${DOMAIN}`, undefined, signer);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the public answer when the gateway is too old to know better', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ hostname: `x.${DOMAIN}`, available: false, reason: 'taken' })),
+      )
+      .mockResolvedValueOnce(new Response('nope', { status: 404 }));
+
+    await expect(
+      checkNameAvailable(DASHBOARD_HOST, `x.${DOMAIN}`, undefined, signer),
+    ).resolves.toMatchObject({ available: false, reason: 'taken' });
+  });
 });

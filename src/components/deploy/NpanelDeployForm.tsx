@@ -3,6 +3,7 @@ import { AlertCircle, Check, Loader2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { checkNameAvailable, type NameAvailability } from '@/lib/deploy/NpanelAdapter';
 
 /** How long typing has to stop before the gateway is asked about a name. */
@@ -34,6 +35,11 @@ type NameState =
   | { kind: 'unavailable'; message: string };
 
 function describe(availability: NameAvailability, domain: string): NameState {
+  // A name the gateway recognises as this user's own. It is spoken for, and
+  // they are who it is spoken for by — deploying updates the site already
+  // there rather than taking anything.
+  if (availability.reason === 'mine') return { kind: 'mine' };
+
   if (availability.available) return { kind: 'free' };
 
   if (availability.reason === 'taken') {
@@ -56,6 +62,7 @@ export function NpanelDeployForm({
   onSiteDescriptionChange,
   onValidationChange,
 }: NpanelDeployFormProps) {
+  const { user } = useCurrentUser();
   const [subdomain, setSubdomain] = useState(savedSubdomain || projectId);
   const [siteTitle, setSiteTitle] = useState(savedSiteTitle ?? projectName);
   const [siteDescription, setSiteDescription] = useState(savedSiteDescription ?? '');
@@ -87,12 +94,12 @@ export function NpanelDeployForm({
 
   // The name this project already deployed to is not "taken" — it is theirs,
   // and asking the gateway would truthfully say taken and alarm them about
-  // their own site.
-  const isOwnName = Boolean(savedSubdomain) && subdomain === savedSubdomain;
+  // their own site. Compared trimmed, since that is what gets deployed: a
+  // trailing space is not a different name.
+  const trimmed = subdomain.trim();
+  const isOwnName = Boolean(savedSubdomain) && trimmed === savedSubdomain;
 
   useEffect(() => {
-    const trimmed = subdomain.trim();
-
     if (!trimmed) {
       setNameState({ kind: 'empty' });
       return;
@@ -106,10 +113,14 @@ export function NpanelDeployForm({
 
     const controller = new AbortController();
     const timer = setTimeout(async () => {
+      // Signed, where there is someone to sign: a name this user owns but this
+      // project has never deployed to — one they took back through the
+      // migration — is otherwise indistinguishable from a stranger's.
       const availability = await checkNameAvailable(
         dashboardHost,
         `${trimmed}.${domain}`,
         controller.signal,
+        user?.signer,
       );
       if (!controller.signal.aborted) setNameState(describe(availability, domain));
     }, AVAILABILITY_DEBOUNCE_MS);
@@ -118,7 +129,7 @@ export function NpanelDeployForm({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [subdomain, isOwnName, dashboardHost, domain]);
+  }, [trimmed, isOwnName, dashboardHost, domain, user?.signer]);
 
   // A name still being checked stays deployable: the gateway decides for real
   // when the deploy runs, and blocking the button on an in-flight request would
