@@ -1,8 +1,25 @@
+import { nip19 } from 'nostr-tools';
 import type { NostrEvent } from '@nostrify/nostrify';
+import { buildNsiteUrl, isValidDTag } from '@/lib/utils/nsite';
 import type { NpanelClaim, NpanelClaimManifest } from './npanelApi';
 
 /** nsite named-site kind. Everything a gateway archived is one of these. */
 export const NAMED_SITE_KIND = 35128;
+
+/** nsite root-site kind. One per key, which is why one is never republished. */
+export const ROOT_SITE_KIND = 15128;
+
+/**
+ * A gateway that serves any nsite from its address alone.
+ *
+ * Not this gateway, deliberately. Everything in this list is a decision about a
+ * site somebody has not looked at in a year, and the honest way to show them one
+ * is from an address rather than from the name that is in question — a name
+ * about to be deleted, or one that no certificate covers and that has therefore
+ * never loaded for anyone. It reads the same relays this provider publishes to,
+ * so the archive's copy is as findable there as anywhere.
+ */
+const PREVIEW_GATEWAY = 'nsite.lol';
 
 /**
  * Tags the archive wrote about itself, which are not the site's to carry.
@@ -58,6 +75,59 @@ export function isServableHostname(hostname: string, domain: string): boolean {
 
   const label = name.slice(0, -suffix.length);
   return label.length > 0 && !label.includes('.');
+}
+
+/**
+ * Somewhere the site at an address can actually be looked at.
+ *
+ * Preferred over the hostname because a preview is worth most for the names the
+ * hostname cannot show: one too deep for a wildcard certificate, which answers a
+ * TLS error and always has, and one about to be deleted, which will stop
+ * answering at all. An address survives both.
+ *
+ * Undefined when the identifier is longer than a DNS label leaves room for —
+ * about a quarter of what this migration carries, because the host it came from
+ * named sites after projects and never had to fit one in a subdomain. There is
+ * no address-based URL for those on any gateway, so callers fall back to the
+ * hostname where the hostname works.
+ */
+export function nsitePreviewUrl(address: string | null | undefined): string | undefined {
+  if (!address) return undefined;
+
+  const [kind, pubkey, ...rest] = address.split(':');
+  const identifier = rest.join(':');
+
+  if (!/^[0-9a-f]{64}$/i.test(pubkey ?? '')) return undefined;
+
+  if (Number(kind) === ROOT_SITE_KIND && !identifier) {
+    return buildNsiteUrl({ pubkeyHex: pubkey, npub: nip19.npubEncode(pubkey), gateway: PREVIEW_GATEWAY });
+  }
+
+  if (Number(kind) === NAMED_SITE_KIND && isValidDTag(identifier)) {
+    return buildNsiteUrl({
+      pubkeyHex: pubkey,
+      npub: nip19.npubEncode(pubkey),
+      gateway: PREVIEW_GATEWAY,
+      siteIdentifier: identifier,
+    });
+  }
+
+  return undefined;
+}
+
+/**
+ * Where to send somebody who wants to see a site before deciding about it.
+ *
+ * {@link nsitePreviewUrl} first, the hostname second, and nothing at all for a
+ * name that is both unservable and unaddressable — which is a real combination
+ * here, and better shown as no button than as a link to a certificate error.
+ */
+export function sitePreviewUrl(
+  address: string | null | undefined,
+  hostname: string,
+  domain: string,
+): string | undefined {
+  return nsitePreviewUrl(address) ?? (isServableHostname(hostname, domain) ? `https://${hostname}` : undefined);
 }
 
 /**

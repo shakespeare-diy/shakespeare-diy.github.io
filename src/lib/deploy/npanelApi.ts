@@ -179,3 +179,32 @@ export async function claimNpanelHostname(
     throw await npanelError(response, `Could not take back ${hostname}`);
   }
 }
+
+/**
+ * Give a name up rather than take it back.
+ *
+ * The gateway forgets the hostname entirely: it stops serving the archived
+ * site, stops holding the name, and the name goes back to being anybody's. What
+ * this cannot touch is the network — the archive's manifest is its own event
+ * under its own key, and a copy the user published is theirs to retract — so
+ * this is a request to one server and nothing more.
+ */
+export async function deleteNpanelClaim(
+  dashboardHost: string,
+  signer: NostrSigner,
+  hostname: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await npanelRequest(
+    dashboardHost,
+    signer,
+    'DELETE',
+    `/api/claims/${encodeURIComponent(hostname)}`,
+    undefined,
+    signal,
+  );
+
+  if (!response.ok) {
+    throw await npanelError(response, `Could not delete ${hostname}`);
+  }
+}

@@ -3,11 +3,14 @@ import type { NostrEvent } from '@nostrify/nostrify';
 import type { NpanelClaim } from './npanelApi';
 import {
   NAMED_SITE_KIND,
+  ROOT_SITE_KIND,
   hasArchiveTitle,
   isServableHostname,
+  nsitePreviewUrl,
   planClaim,
   republishTags,
   retitleTags,
+  sitePreviewUrl,
 } from './npanelMigration';
 
 const PUBKEY = 'a'.repeat(64);
@@ -92,6 +95,54 @@ describe('isServableHostname', () => {
     expect(isServableHostname('a.b.shakespeare.wtf', DOMAIN)).toBe(false);
     expect(isServableHostname('shakespeare.wtf', DOMAIN)).toBe(false);
     expect(isServableHostname('mysite.example.com', DOMAIN)).toBe(false);
+  });
+});
+
+describe('nsitePreviewUrl', () => {
+  it('addresses a named site by its base36 pubkey and identifier', () => {
+    expect(nsitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:mysite`)).toMatch(/^https:\/\/[0-9a-z]{50}mysite\.nsite\.lol$/);
+  });
+
+  it('addresses a root site by its npub', () => {
+    expect(nsitePreviewUrl(`${ROOT_SITE_KIND}:${ARCHIVE}:`)).toMatch(/^https:\/\/npub1[0-9a-z]+\.nsite\.lol$/);
+  });
+
+  it('has nowhere to send an identifier that will not fit a DNS label', () => {
+    // About a quarter of what this migration carries: the host it came from
+    // named sites after projects and never had to fit one in a subdomain.
+    expect(nsitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:nostr-pro-file-manager`)).toBeUndefined();
+    // Uppercase resolves as a DNS label and then matches no `d` tag, which is
+    // worse than no link at all.
+    expect(nsitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:ErrorTime`)).toBeUndefined();
+  });
+
+  it('says nothing about an address it cannot read', () => {
+    expect(nsitePreviewUrl(null)).toBeUndefined();
+    expect(nsitePreviewUrl(undefined)).toBeUndefined();
+    expect(nsitePreviewUrl(`${NAMED_SITE_KIND}:not-a-pubkey:mysite`)).toBeUndefined();
+    expect(nsitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:`)).toBeUndefined();
+  });
+});
+
+describe('sitePreviewUrl', () => {
+  it('prefers the address, which outlives both the name and its certificate', () => {
+    expect(sitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:mysite`, 'mysite.shakespeare.wtf', DOMAIN)).toMatch(
+      /\.nsite\.lol$/,
+    );
+  });
+
+  it('falls back to the hostname when no gateway label can hold the identifier', () => {
+    expect(
+      sitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:nostr-pro-file-manager`, 'long.shakespeare.wtf', DOMAIN),
+    ).toBe('https://long.shakespeare.wtf');
+  });
+
+  it('offers nothing for a name that is neither servable nor addressable', () => {
+    // A link to a certificate error is worse than no button.
+    expect(sitePreviewUrl(null, 'a.b.shakespeare.wtf', DOMAIN)).toBeUndefined();
+    expect(
+      sitePreviewUrl(`${NAMED_SITE_KIND}:${ARCHIVE}:nostr-pro-file-manager`, 'a.b.shakespeare.wtf', DOMAIN),
+    ).toBeUndefined();
   });
 });
 
