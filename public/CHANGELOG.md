@@ -1,5 +1,15 @@
 # Changelog
 
+## [9.16.3] - 2026-09-14
+
+### Added
+- Take back your sites one at a time — every name waiting for you now has its own Publish, Show, and Delete buttons, so you can keep the few you want and clear out the rest
+- Show opens a site by its Nostr address before you decide about it, so you can look at names that never loaded in a browser
+
+### Changed
+- Deleting a name only gives it up on shakespeare.wtf — anything published to Nostr stays yours
+- Names that couldn't be taken back safely can now be cleared out, instead of only explaining why they were stuck
+
 ## [9.16.2] - 2026-09-13
 
 ### Changed
