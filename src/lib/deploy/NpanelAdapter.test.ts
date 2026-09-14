@@ -271,3 +271,32 @@ describe('checkNameAvailable', () => {
     ).resolves.toMatchObject({ available: false, reason: 'taken' });
   });
 });
+
+describe('checkNameAvailable, for a name held for its previous owner', () => {
+  it('reports waiting rather than taken', async () => {
+    // The state almost every unclaimed name is in: an archive serving it, so
+    // the public answer is taken and the useful answer is that it is theirs.
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ hostname: `x.${DOMAIN}`, available: false, reason: 'taken' })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ hostname: `x.${DOMAIN}`, available: false, reason: 'waiting' })),
+      );
+
+    await expect(
+      checkNameAvailable(DASHBOARD_HOST, `x.${DOMAIN}`, undefined, signer),
+    ).resolves.toMatchObject({ available: false, reason: 'waiting' });
+  });
+
+  it('says nothing more to somebody who did not sign', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ hostname: `x.${DOMAIN}`, available: false, reason: 'taken' })),
+    );
+
+    await expect(checkNameAvailable(DASHBOARD_HOST, `x.${DOMAIN}`)).resolves.toMatchObject({
+      reason: 'taken',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

@@ -12,11 +12,16 @@ export interface NameAvailability {
   available: boolean;
   /**
    * Why it is not free, or — with `available` — that it is not free of somebody
-   * else. `mine` comes only from a signed request, and only from a gateway new
-   * enough to answer one; an older one says `taken` and is not wrong, just less
-   * use to the person who owns the name.
+   * else.
+   *
+   * `mine` is a name this signer can already point somewhere. `waiting` is one
+   * the gateway is holding for them from before it took the domain over: not
+   * free, not theirs to deploy to yet, and one claim away from both. Both come
+   * only from a signed request, and only from a gateway new enough to answer
+   * one; an older one says `taken`, which is not wrong, just of no use to the
+   * person the name belongs to.
    */
-  reason?: 'taken' | 'invalid' | 'mine';
+  reason?: 'taken' | 'invalid' | 'mine' | 'waiting';
   /** Present when `reason` is `invalid`; written to be shown to whoever typed it. */
   error?: string;
 }

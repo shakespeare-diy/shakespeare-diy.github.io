@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AlertCircle, Check, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,12 +25,21 @@ interface NpanelDeployFormProps {
   onSiteTitleChange: (title: string) => void;
   onSiteDescriptionChange: (description: string) => void;
   onValidationChange?: (isValid: boolean) => void;
+  /**
+   * Open the list of names this gateway is holding for whoever signs in.
+   *
+   * Passed in rather than opened here: recognising one name is usually not the
+   * whole of what somebody has waiting, and the dialog that hands them all back
+   * belongs above this field rather than inside it.
+   */
+  onTakeBackSites?: () => void;
 }
 
 /** What the field is currently saying about the name in it. */
 type NameState =
   | { kind: 'empty' }
   | { kind: 'mine' }
+  | { kind: 'waiting' }
   | { kind: 'checking' }
   | { kind: 'free' }
   | { kind: 'unavailable'; message: string };
@@ -39,6 +49,11 @@ function describe(availability: NameAvailability, domain: string): NameState {
   // they are who it is spoken for by — deploying updates the site already
   // there rather than taking anything.
   if (availability.reason === 'mine') return { kind: 'mine' };
+
+  // Theirs from before the gateway, and still held for them. Not somewhere
+  // they can deploy until they take it back, which is a thing they can do
+  // from here rather than a wall.
+  if (availability.reason === 'waiting') return { kind: 'waiting' };
 
   if (availability.available) return { kind: 'free' };
 
@@ -61,6 +76,7 @@ export function NpanelDeployForm({
   onSiteTitleChange,
   onSiteDescriptionChange,
   onValidationChange,
+  onTakeBackSites,
 }: NpanelDeployFormProps) {
   const { user } = useCurrentUser();
   const [subdomain, setSubdomain] = useState(savedSubdomain || projectId);
@@ -134,7 +150,11 @@ export function NpanelDeployForm({
   // A name still being checked stays deployable: the gateway decides for real
   // when the deploy runs, and blocking the button on an in-flight request would
   // make the form feel stuck on a slow connection.
-  const isValid = subdomain.trim() !== '' && nameState.kind !== 'unavailable';
+  // A name still waiting is not one to deploy to: the gateway would refuse,
+  // because taking it back is what turns it into somewhere this user can
+  // publish. The field says so and offers the step rather than the refusal.
+  const isValid =
+    subdomain.trim() !== '' && nameState.kind !== 'unavailable' && nameState.kind !== 'waiting';
 
   useEffect(() => {
     onValidationChange?.(isValid);
@@ -192,6 +212,24 @@ export function NpanelDeployForm({
           <p className="text-xs text-muted-foreground">
             Updating <span className="font-mono">{subdomain.trim()}.{domain}</span>.
           </p>
+        )}
+
+        {nameState.kind === 'waiting' && (
+          <div className="rounded-md border border-dashed p-3 space-y-2">
+            <p className="text-sm">
+              <span className="font-mono">{subdomain.trim()}.{domain}</span> is being held for you.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              You published it before {domain} moved to this gateway. It is being served from an
+              archive until you take it back, which publishes your own copy and points the name at
+              it.
+            </p>
+            {onTakeBackSites && (
+              <Button type="button" variant="outline" size="sm" onClick={onTakeBackSites}>
+                Take back your sites
+              </Button>
+            )}
+          </div>
         )}
 
         {nameState.kind === 'unavailable' && (

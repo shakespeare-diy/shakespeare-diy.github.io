@@ -3,7 +3,12 @@ import { useNostr } from '@nostrify/react';
 import type { NostrEvent } from '@nostrify/nostrify';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import type { NpanelProvider } from '@/contexts/DeploySettingsContext';
-import { fetchNpanelClaims, type NpanelClaim } from '@/lib/deploy/npanelApi';
+import {
+  fetchNpanelClaimCount,
+  fetchNpanelClaims,
+  type NpanelClaim,
+  type NpanelClaimCount,
+} from '@/lib/deploy/npanelApi';
 import {
   NAMED_SITE_KIND,
   hasArchiveTitle,
@@ -153,6 +158,35 @@ export function useNpanelClaims(provider: NpanelProvider | undefined) {
       }
 
       return { waiting, taken, events: [...byIdentifier.values()] };
+    },
+  });
+}
+
+/**
+ * How many names a gateway is holding for the logged-in user.
+ *
+ * Separate from {@link useNpanelClaims} because it is asked at a different
+ * moment and must cost a different amount. That one runs when somebody opens
+ * the dialog and has already decided to look; it reads every claimed deploy on
+ * the gateway and queries relays for this user's own events. This one runs
+ * because a settings page was opened, so it is one signature and two counted
+ * rows, and a gateway that cannot answer it says nothing rather than failing.
+ */
+export function useNpanelClaimCount(provider: NpanelProvider | undefined) {
+  const { user } = useCurrentUser();
+
+  return useQuery<NpanelClaimCount>({
+    queryKey: ['npanel-claim-count', provider?.dashboardHost, user?.pubkey],
+    enabled: Boolean(provider && user),
+    // Nobody's list of waiting names changes on its own, and every refetch
+    // costs a signature — which on a remote signer costs a round trip. Long
+    // enough that opening settings twice in a sitting asks once.
+    staleTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      if (!provider || !user) return { waiting: 0, taken: 0 };
+      return await fetchNpanelClaimCount(provider.dashboardHost, user.signer, signal);
     },
   });
 }

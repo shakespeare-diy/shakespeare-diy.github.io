@@ -114,6 +114,50 @@ export async function fetchNpanelClaims(
   return claims;
 }
 
+/** How many names a gateway is holding for somebody, and how many they took. */
+export interface NpanelClaimCount {
+  waiting: number;
+  taken: number;
+}
+
+/**
+ * The count alone, without working out what to do about any of them.
+ *
+ * {@link fetchNpanelClaims} reads every file of every claimed deploy and returns
+ * a manifest each, which is the right price for the dialog that hands the names
+ * back and much too high for the sentence that gets somebody to open it. A
+ * gateway too old to know the parameter answers with the list instead, so the
+ * shape is checked rather than assumed — and a gateway that fails outright
+ * reports nothing waiting, since a number nobody can fetch should not become an
+ * error on a settings page.
+ */
+export async function fetchNpanelClaimCount(
+  dashboardHost: string,
+  signer: NostrSigner,
+  signal?: AbortSignal,
+): Promise<NpanelClaimCount> {
+  const none: NpanelClaimCount = { waiting: 0, taken: 0 };
+
+  try {
+    const response = await npanelRequest(
+      dashboardHost,
+      signer,
+      'GET',
+      '/api/claims?summary=1',
+      undefined,
+      signal,
+    );
+    if (!response.ok) return none;
+
+    const body = (await response.json()) as Partial<NpanelClaimCount>;
+    if (typeof body.waiting !== 'number' || typeof body.taken !== 'number') return none;
+
+    return { waiting: body.waiting, taken: body.taken };
+  } catch {
+    return none;
+  }
+}
+
 /** Point a name waiting for this signer at a site they published. */
 export async function claimNpanelHostname(
   dashboardHost: string,

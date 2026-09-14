@@ -15,6 +15,7 @@ import { ProviderConfigDialog } from '@/components/ProviderConfigDialog';
 import { AddDeployProviderDialog } from '@/components/AddDeployProviderDialog';
 import { AddCustomProviderDialog } from '@/components/AddCustomProviderDialog';
 import { NpanelMigrationDialog } from '@/components/deploy/NpanelMigrationDialog';
+import { useNpanelClaimCount } from '@/hooks/useNpanelClaims';
 import { Button } from '@/components/ui/button';
 import {
   DndContext,
@@ -344,27 +345,13 @@ export function DeploySettings() {
             </div>
           )}
 
-          {/* Sites held for their previous owner on a gateway that took over a
-              domain. Shown without asking the gateway first: finding out costs
-              a signature, and a signing prompt nobody asked for is worse than a
-              button that sometimes opens an empty list. */}
           {user && settings.providers.map((provider) => (
             provider.type === 'npanel' ? (
-              <div
+              <HeldSites
                 key={`migrate-${provider.id}`}
-                className="rounded-lg border border-dashed p-4 flex flex-wrap items-center justify-between gap-3"
-              >
-                <div className="space-y-1">
-                  <h4 className="text-sm font-medium">Sites from before {provider.name}</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Names you published on {provider.domain} under the old host are being served
-                    from an archive until you take them back.
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => setMigratingProvider(provider)}>
-                  Take back sites
-                </Button>
-              </div>
+                provider={provider}
+                onOpen={() => setMigratingProvider(provider)}
+              />
             ) : null
           ))}
 
@@ -437,6 +424,47 @@ export function DeploySettings() {
         </>
       )}
     </SettingsPageLayout>
+  );
+}
+
+/**
+ * Sites held for their previous owner on a gateway that took over a domain.
+ *
+ * The count is asked for on load, rather than the card standing there saying
+ * "you may have sites waiting" to everyone forever. Almost nobody does, and a
+ * card that cannot tell them apart is one most people learn to ignore before
+ * it ever applies to them — while the person it does apply to has a few names
+ * being served from an archive under a key that is not theirs, which is worth
+ * one signature to say out loud.
+ *
+ * It is only the count: {@link useNpanelClaimCount} is two counted rows, not
+ * the deploy-by-deploy read the dialog does when somebody opens it.
+ */
+function HeldSites({ provider, onOpen }: { provider: NpanelProvider; onOpen: () => void }) {
+  const { data } = useNpanelClaimCount(provider);
+
+  // Nothing to say until the gateway says there is something, so a gateway with
+  // no migration behind it — every gateway but the one — shows nothing at all.
+  if (!data?.waiting) return null;
+
+  return (
+    <div className="rounded-lg border border-dashed p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-1">
+        <h4 className="text-sm font-medium">
+          {data.waiting === 1
+            ? `One name is waiting for you on ${provider.domain}`
+            : `${data.waiting} names are waiting for you on ${provider.domain}`}
+        </h4>
+        <p className="text-sm text-muted-foreground">
+          You published {data.waiting === 1 ? 'it' : 'them'} before {provider.domain} moved to{' '}
+          {provider.name}. {data.waiting === 1 ? 'It is' : 'They are'} being served from an archive
+          until you take {data.waiting === 1 ? 'it' : 'them'} back.
+        </p>
+      </div>
+      <Button variant="outline" onClick={onOpen}>
+        Take back sites
+      </Button>
+    </div>
   );
 }
 

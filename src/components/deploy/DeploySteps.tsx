@@ -17,7 +17,8 @@ import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useGit } from '@/hooks/useGit';
 import { NostrURI } from '@/lib/NostrURI';
 import { Link } from 'react-router-dom';
-import type { DeployProvider } from '@/contexts/DeploySettingsContext';
+import type { DeployProvider, NpanelProvider } from '@/contexts/DeploySettingsContext';
+import { NpanelMigrationDialog } from '@/components/deploy/NpanelMigrationDialog';
 import type { PresetDeployProvider } from '@/lib/deploy/types';
 import { PRESET_DEPLOY_PROVIDERS } from '@/lib/deployProviderPresets';
 import { NpanelDeployForm } from '@/components/deploy/NpanelDeployForm';
@@ -154,6 +155,24 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
   const [deployResult, setDeployResult] = useState<{ url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isNpanelFormValid, setIsNpanelFormValid] = useState(true);
+  /**
+   * The gateway whose held names are being looked at, if any.
+   *
+   * Owned here rather than by the name field, because what someone recognising
+   * one of their names wants is usually all of them, and because the dialog
+   * that hands them back outlives the field that prompted it.
+   */
+  const [migratingProvider, setMigratingProvider] = useState<NpanelProvider | null>(null);
+
+  /**
+   * Whether the deploy failed because the gateway is holding the name for this
+   * user, which is a refusal with something to do about it.
+   *
+   * Read off the sentence npanel sent rather than a status code, since the 409
+   * it arrives as also covers a name somebody else holds and a name that is
+   * simply configured already.
+   */
+  const heldName = error !== null && /being held for you/i.test(error);
 
   // .nsite/config.json state — loaded once on mount, used to skip config form on re-deploy
   const [nsiteVfsConfig, setNsiteVfsConfig] = useState<NsiteVfsConfig | null>(null);
@@ -627,6 +646,7 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
           onSiteTitleChange={handleNpanelSiteTitleChange}
           onSiteDescriptionChange={handleNpanelSiteDescriptionChange}
           onValidationChange={handleNpanelValidationChange}
+          onTakeBackSites={() => setMigratingProvider(npanelProvider)}
         />
       );
     }
@@ -978,7 +998,22 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription className="space-y-2">
+                    <p>{error}</p>
+                    {/* The gateway refuses a name it is holding for this user
+                        and says to take it back instead. Saying so and leaving
+                        them to find out where is the worst of both. */}
+                    {heldName && selectedProvider?.type === 'npanel' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMigratingProvider(selectedProvider)}
+                      >
+                        Take back your sites
+                      </Button>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -1014,6 +1049,14 @@ export function DeploySteps({ projectId, projectName, onClose }: DeployStepsProp
             </>
           )}
         </div>
+      )}
+
+      {migratingProvider && (
+        <NpanelMigrationDialog
+          open
+          onOpenChange={(open) => !open && setMigratingProvider(null)}
+          provider={migratingProvider}
+        />
       )}
     </div>
   );
