@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.16.1] - 2026-09-13
+
+### Fixed
+- Deploying to a name you already own works again — names you took back in the migration were reported as taken by somebody else, and the Deploy button refused to publish to your own site
+
 ## [9.16.0] - 2026-09-13
 
 ### Added
