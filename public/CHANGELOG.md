@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.16.4] - 2026-09-16
+
+### Changed
+- Published sites carry only the tags the nsite spec defines — the relay hints Shakespeare used to attach were read by nothing, and taking a site back no longer rewrites them
+
 ## [9.16.3] - 2026-09-14
 
 ### Added
