@@ -145,7 +145,7 @@ export function NpanelMigrationDialog({ open, onOpenChange, provider }: NpanelMi
         kind: NAMED_SITE_KIND,
         content: claim.step.manifest.content,
         created_at: Math.floor(Date.now() / 1000),
-        tags: republishTags(claim.step.manifest, claim.step.identifier, provider.relayUrls, {
+        tags: republishTags(claim.step.manifest, claim.step.identifier, {
           title: claim.suggestedTitle,
           description: claim.suggestedDescription,
         }),

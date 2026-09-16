@@ -154,15 +154,15 @@ describe('republishTags', () => {
     const tags = republishTags(
       { ...manifest, tags: [...manifest.tags, ['relay', 'wss://gone.example']] },
       'mysite',
-      ['wss://relay.ditto.pub'],
       { title: 'My Site', description: 'What it is for.' },
     );
 
     expect(tags[0]).toEqual(['d', 'mysite']);
     expect(tags).toContainEqual(['path', '/index.html', 'c'.repeat(64)]);
     expect(tags).toContainEqual(['server', 'https://blossom.ditto.pub/']);
-    expect(tags).toContainEqual(['relay', 'wss://relay.ditto.pub']);
-    expect(tags).not.toContainEqual(['relay', 'wss://gone.example']);
+    // NIP-5A has no relay-hint tag, so the archive's are dropped and none of
+    // ours take their place.
+    expect(tags.some(([name]) => name === 'relay' || name === 'r')).toBe(false);
     expect(tags.filter(([name]) => name === 'd')).toHaveLength(1);
 
     // The archive's title was the hostname and its `alt` says the site is
@@ -180,7 +180,7 @@ describe('republishTags', () => {
     // Roughly a third of these are shells that set their title from JavaScript.
     // No title is what an nsite manifest without one has always meant, and is
     // better than a domain wearing a name's clothes.
-    const tags = republishTags(manifest, 'mysite', [], {});
+    const tags = republishTags(manifest, 'mysite', {});
 
     expect(tags.some(([name]) => name === 'title')).toBe(false);
     expect(tags).toContainEqual(['path', '/index.html', 'c'.repeat(64)]);
@@ -188,7 +188,7 @@ describe('republishTags', () => {
 });
 
 describe('retitleTags', () => {
-  it('swaps the archive’s words and passes everything else through', () => {
+  it('swaps the archive’s words, drops the tags NIP-5A never had, and passes the rest through', () => {
     const event = {
       id: 'e'.repeat(64),
       pubkey: PUBKEY,
@@ -208,10 +208,13 @@ describe('retitleTags', () => {
     const tags = retitleTags(event, { title: 'My Site' });
 
     expect(tags).toContainEqual(['d', 'mysite']);
-    expect(tags).toContainEqual(['path', '/index.html', 'c'.repeat(64)]);
     // Built from the event as relays hold it, so a site redeployed since this
     // migration ran keeps whatever it has become.
-    expect(tags).toContainEqual(['relay', 'wss://relay.ditto.pub']);
+    expect(tags).toContainEqual(['path', '/index.html', 'c'.repeat(64)]);
+    expect(tags).toContainEqual(['server', 'https://blossom.ditto.pub/']);
+    // Except the relay hints an older deploy wrote, which re-signing is the
+    // chance to stop carrying.
+    expect(tags.some(([name]) => name === 'relay')).toBe(false);
     expect(tags).toContainEqual(['title', 'My Site']);
     expect(tags.filter(([name]) => name === 'title')).toHaveLength(1);
   });

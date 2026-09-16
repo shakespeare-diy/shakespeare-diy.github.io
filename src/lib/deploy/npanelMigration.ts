@@ -208,13 +208,14 @@ export function planClaim(
  * called gets no title, which is what an nsite manifest without one has always
  * meant and is more honest than a domain.
  *
- * Relay hints are replaced for the same reason: the archive's say where the
- * archive published, and this event is going somewhere else.
+ * The archive's relay hints are dropped and not replaced. NIP-5A gives a
+ * manifest no tag for saying where it was published, so the archive's `relay`
+ * and `r` tags are tags that were never part of the spec, and re-signing them
+ * under someone else's key would only spread them further.
  */
 export function republishTags(
   manifest: NpanelClaimManifest,
   identifier: string,
-  relayUrls: string[],
   identity: SiteIdentity = {},
 ): string[][] {
   const kept = manifest.tags.filter(
@@ -226,7 +227,6 @@ export function republishTags(
     ['d', identifier],
     ...kept,
     ...describeTags(identity),
-    ...relayUrls.map((url) => ['relay', url]),
   ];
 }
 
@@ -237,10 +237,16 @@ export function republishTags(
  * holds, because the two are not always the same thing: a site republished by
  * this migration and then redeployed normally has moved on, and rebuilding it
  * out of the gateway's copy would quietly restore an older version of the site.
- * Everything but the archive's own words is passed through untouched.
+ * Everything but the archive's own words and the relay hints NIP-5A never
+ * defined is passed through untouched; signing an event is the moment to stop
+ * carrying a tag that does not exist.
  */
 export function retitleTags(event: NostrEvent, identity: SiteIdentity): string[][] {
-  return [...event.tags.filter(([name]) => !ARCHIVE_TAGS.has(name)), ...describeTags(identity)];
+  const kept = event.tags.filter(
+    ([name]) => name !== 'relay' && name !== 'r' && !ARCHIVE_TAGS.has(name),
+  );
+
+  return [...kept, ...describeTags(identity)];
 }
 
 /**

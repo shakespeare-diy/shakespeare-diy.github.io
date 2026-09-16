@@ -250,8 +250,8 @@ async function runConcurrent<T>(
  * - HEAD-checks each file on each Blossom server before uploading
  * - PUTs files to Blossom servers with pre-signed auth headers
  * - Publishes a single kind-15128 (root) or kind-35128 (named) site manifest event
- *   containing all ["path", "/path", sha256] tags, ["server", url] Blossom hints,
- *   and ["relay", url] relay hints — no separate kind 10002 or kind 10063 published
+ *   containing all ["path", "/path", sha256] tags and ["server", url] Blossom
+ *   hints — no separate kind 10002 or kind 10063 published
  *
  * Named sites (kind 35128, siteIdentifier set):
  *   URL = https://{base36pubkey}{siteIdentifier}.{gateway}
@@ -367,8 +367,10 @@ export class NsiteAdapter implements DeployAdapter {
       pathTags.push(['path', '/404.html', indexFile.sha256]);
     }
 
+    // NIP-5A defines no relay-hint tag for a manifest, so the relays a site was
+    // published to are not written into it. Where to find the event is the
+    // reader's problem and the author's kind 10002, not the manifest's.
     const serverTags: string[][] = serverBases.map(url => ['server', url]);
-    const relayTags: string[][] = this.relayUrls.map(url => ['relay', url]);
 
     const tags: string[][] = [];
 
@@ -377,7 +379,7 @@ export class NsiteAdapter implements DeployAdapter {
       tags.push(['d', this.siteIdentifier]);
     }
 
-    tags.push(...pathTags, ...serverTags, ...relayTags);
+    tags.push(...pathTags, ...serverTags);
 
     if (this.siteTitle) {
       tags.push(['title', this.siteTitle]);
@@ -399,7 +401,7 @@ export class NsiteAdapter implements DeployAdapter {
     });
 
     // ── Step 5: Publish manifest ──────────────────────────────────────────────
-    // Relay and server hints are embedded as tags in the manifest itself —
+    // Blossom server hints are embedded as tags in the manifest itself —
     // no separate kind 10002 or kind 10063 events are published.
     //
     // Relay by relay, because the site is only as findable as the relays that
